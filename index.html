@@ -968,8 +968,8 @@ function account() {
     <p>Enter your email and choose a password to save your tank logs.</p>
     <form id="shared-signup" class="stack">
       <label>Email address<input type="email" name="email" autocomplete="username" required maxlength="254"></label>
-      <label>Password<input type="password" name="password" autocomplete="new-password" required minlength="12" maxlength="72" aria-describedby="signup-password-rules"></label>
-      <p class="muted" id="signup-password-rules">Use at least 12 characters. Keep your password handy since email is not verified.</p>
+      <label>Password<input type="password" name="password" autocomplete="new-password" required minlength="6" maxlength="72" aria-describedby="signup-password-rules"></label>
+      <p class="muted" id="signup-password-rules">Use at least 6 characters. Keep your password handy since email is not verified.</p>
       <div><button class="primary">Create account</button></div>
     </form>
     <p id="cloud-status" role="status">${esc(authMessage)}</p>
@@ -984,8 +984,8 @@ function account() {
       <p>${isInvite ? 'Use the email on your invitation and choose a password.' : 'Choose a new password for this account.'}</p>
       <form id="set-password" class="stack">
         <label>Email address<input type="email" name="email" value="${esc(cloud.email)}" autocomplete="username" readonly></label>
-        <label>${isInvite ? 'Password' : 'New password'}<input type="password" name="password" autocomplete="new-password" required minlength="12" aria-describedby="password-requirements"></label>
-        <p class="muted" id="password-requirements">Use at least 12 characters.</p>
+        <label>${isInvite ? 'Password' : 'New password'}<input type="password" name="password" autocomplete="new-password" required minlength="6" aria-describedby="password-requirements"></label>
+        <p class="muted" id="password-requirements">Use at least 6 characters.</p>
         <div><button class="primary">${isInvite ? 'Create account' : 'Save password'}</button></div>
       </form>
       <p id="cloud-status" role="status">${esc(cloud.passwordMessage ?? '')}</p>
