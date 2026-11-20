@@ -51,7 +51,7 @@ button,input,select,textarea{background:#141f30;color:var(--ink);border-color:#3
 dialog::backdrop{background:#020611bf}
 @media(max-width:600px){
   .bar{min-height:58px}
-  .bar nav{position:fixed;bottom:0;left:0;right:0;z-index:2;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;background:#101827;border-top:1px solid var(--line);padding:7px 5px max(7px,env(safe-area-inset-bottom))}
+  .bar nav{position:fixed;bottom:0;left:0;right:0;z-index:2;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;background:#101827;border-top:1px solid var(--line);padding:7px 5px max(7px,env(safe-area-inset-bottom))}
   nav button{padding:9px 3px;font-size:.83rem}
   main{padding-bottom:86px}
 }
@@ -75,10 +75,33 @@ dialog::backdrop{background:#020611bf}
 .tank-actions{margin-top:7px;padding-top:9px;border-top:1px solid var(--line)}
 .danger{color:#ffadb7;border-color:#714052}
 .danger:hover{background:#422633}
+
+.settings-menu{position:relative}
+.settings-menu summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;border-radius:9px;padding:8px 12px;color:#b4c5d7;font-weight:650}
+.settings-menu summary::-webkit-details-marker{display:none}
+.settings-menu[open] summary,.settings-menu:has(button[aria-current]) summary{background:#153744;color:#71e5f2}
+.menu-icon{display:inline-block;width:14px;height:11px;border-block:1.5px solid currentColor;position:relative}
+.menu-icon::after{content:'';position:absolute;inset:3px 0 auto;border-top:1.5px solid currentColor}
+.settings-popover{position:absolute;right:0;top:calc(100% + 5px);z-index:5;display:grid;gap:3px;min-width:150px;padding:5px;background:#101827;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 22px #03061090}
+.settings-popover button{text-align:left}
+.profile-pills{display:flex;flex-wrap:wrap;gap:5px}
+.profile-pills button{display:flex;align-items:center;gap:4px;border-radius:30px;padding:5px 8px;font-size:.82rem}
+.profile-pills button svg{color:#9fbad5}
+.profile-pills button[data-profile=soft] svg{color:#86dfbd}
+.profile-pills button[data-profile=sps] svg{color:#c0afff}
+.profile-pills button[aria-pressed=true]{border-color:#48d8ee;background:#153744;color:#b5f7ff}
+.target-type button{font-size:.8rem;padding:3px 8px}
+@media(max-width:600px){
+ .settings-menu summary{padding:9px 2px;font-size:.83rem}
+ .settings-popover{top:auto;bottom:calc(100% + 7px)}
+ .settings-popover button{padding:9px 11px}
+}
+
+.invite-share{padding:15px;border:1px solid var(--line);border-radius:12px}.invite-share [hidden]{display:none}
 </style>
 </head>
 <body>
-<header><div class="bar"><div class="brand"><span>Reef</span> Log</div><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="tanks">Tanks</button><button data-view="history">History</button><button data-view="targets">Targets &amp; backup</button><button data-view="account">Account</button></nav></div></header>
+<header><div class="bar"><div class="brand"><span>Reef</span> Log</div><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="tanks">Tanks</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings"><span aria-hidden="true" class="menu-icon"></span>Settings</summary><div class="settings-popover"><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
 <main id="main"></main>
 <dialog id="entry"><form id="test-form" class="stack"></form></dialog>
 <dialog id="rename-tank" aria-labelledby="rename-title">
@@ -110,6 +133,14 @@ const MIXED_REEF = {
   si:  {low:null,high:2},
   nh3: {low:null,high:.1,urgentHigh:.5}
 };
+const CORAL_PROFILES = {
+  soft:{label:'Soft',ranges:{alk:[7.5,11],no3:[2,20],po4:[.03,.15],ca:[380,480],mg:[1250,1450]},
+    icon:'<circle cx="12" cy="12" r="2.2"/><path d="M12 9.8c-2-3.2-4.9-4.6-6.1-1.4-.5 1.5.6 2.7 3.9 3.6-3.5 1-4.1 3-2.2 4.7 1.8 1.5 3.3-.6 4.4-2.5 1.1 1.9 2.6 4 4.4 2.5 1.9-1.7 1.3-3.7-2.2-4.7 3.3-.9 4.4-2.1 3.9-3.6-1.2-3.2-4.1-1.8-6.1 1.4Z"/>'},
+  mixed:{label:'Mixed',ranges:{},
+    icon:'<path d="M4 18h16M8 18v-5m0 2-3-2m3 0 3-4m4 9v-3"/><circle cx="15" cy="10" r="4"/><path d="M15 8v4m-2-2h4"/>'},
+  sps:{label:'SPS',ranges:{alk:[7.5,9],salt:[34.5,35.5],no3:[1,10],po4:[.02,.08],ca:[410,450],mg:[1280,1400]},
+    icon:'<path d="M12 20V5m0 7-5-4V5m5 10 6-5V6M8 19l-4-3v-3m8-4 3-3V3m0 17 5-4v-2"/>'}
+};
 const STORAGE = 'reef-log-v1';
 const CLOUD_URL = 'https://gokemkztwbtuvyfsunml.supabase.co';
 const CLOUD_KEY = 'sb_publishable_BsheAtrv4zxknsyu1ftgLw_-uiJhT3-';
@@ -136,7 +167,7 @@ const dialog = document.querySelector('#entry');
 const form = document.querySelector('#test-form');
 const renameDialog = document.querySelector('#rename-tank');
 const renameForm = document.querySelector('#rename-form');
-const defaults = () => ({version:1, name:'My reef', settings:{}, readings:[]});
+const defaults = () => ({version:1, name:'My reef', profile:'mixed', settings:{}, readings:[]});
 let fleet = {version:2, active:'first', tanks:[{id:'first',log:defaults()}]};
 let state = fleet.tanks[0].log;
 let loadError = '';
@@ -147,7 +178,7 @@ try {
     state = fleet.tanks.find(tank => tank.id === fleet.active).log;
   }
 } catch {
-  loadError = 'The saved log could not be opened. You can restore a backup from Targets & backup.';
+  loadError = 'The saved log could not be opened. You can restore a backup from Settings > Backup.';
 }
 let page = 'overview';
 let selected = 'alk';
@@ -176,7 +207,10 @@ function validate(data) {
         ![item.low,item.high].every(value => value === null || Number.isFinite(value)) ||
         (item.low !== null && item.high !== null && item.low > item.high) ||
         (item.days !== null && (!Number.isInteger(item.days) || item.days < 1 || item.days > 3650))) throw Error('Invalid target');
-    settings[key] = {enabled:item.enabled,low:item.low,high:item.high,days:item.days};
+    settings[key] = {
+      enabled:item.enabled,low:item.low,high:item.high,days:item.days,
+      custom:typeof item.custom === 'boolean' ? item.custom : hasCustomTarget(key,item)
+    };
   }
   const ids = new Set();
   const readings = data.readings.map(row => {
@@ -186,18 +220,35 @@ function validate(data) {
     ids.add(row.id);
     return {id:row.id,key:row.key,value:row.value,date:new Date(row.date).toISOString(),note:row.note};
   });
-  return {version:1,name:data.name.trim().slice(0,60),settings,readings};
+  return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),settings,readings};
 }
 const esc = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const format = value => Number(value).toLocaleString(undefined,{maximumFractionDigits:12});
 const dateText = value => new Date(value).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
+function profileKey(log) {
+  return Object.hasOwn(CORAL_PROFILES,log.profile) ? log.profile : 'mixed';
+}
+
+function profileTarget(key,log = state) {
+  const mixed = MIXED_REEF[key];
+  const bounds = CORAL_PROFILES[profileKey(log)].ranges[key];
+  return bounds ? {...mixed,low:bounds[0],high:bounds[1]} : mixed;
+}
+
+function hasCustomTarget(key,setting) {
+  return (setting.low !== null || setting.high !== null) &&
+    (setting.low !== MIXED_REEF[key].low || setting.high !== MIXED_REEF[key].high);
+}
+
 function config(key) {
   const stored = state.settings[key];
-  const profile = MIXED_REEF[key];
+  const profile = profileTarget(key);
+  const custom = stored && (stored.custom ?? hasCustomTarget(key,stored));
   return {
     enabled: stored?.enabled ?? !['no2','si'].includes(key),
-    low: stored?.low ?? (stored?.high != null ? null : profile.low),
-    high: stored?.high ?? (stored?.low != null ? null : profile.high),
+    low: custom ? stored.low : profile.low,
+    high: custom ? stored.high : profile.high,
+    custom: Boolean(custom),
     days: stored?.days ?? null,
     urgentLow:profile.urgentLow,
     urgentHigh:profile.urgentHigh
@@ -271,10 +322,20 @@ function render() {
     else button.removeAttribute('aria-current');
   });
   main.innerHTML = (loadError ? '<p class="alert" role="alert">' + esc(loadError) + '</p>' : '') +
-    ({overview,history:historyView,targets,tanks,account}[page])() +
-    (cloud ? '<p class="footer">Manage cloud sync in Account. Export a backup from Targets &amp; backup.</p>' :
-    '<p class="footer">Your log is stored in this browser. Sign in from Account to sync across devices.</p>');
+    ({overview,history:historyView,targets,backup,tanks,account}[page])() +
+    (cloud ? '<p class="footer">Manage cloud sync and backups in Settings.</p>' :
+    '<p class="footer">Your log is stored in this browser. Sign in from Settings to sync across devices.</p>');
   if (page === 'history') draw();
+}
+
+function coralIcon(type) {
+  return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CORAL_PROFILES[type].icon}</svg>`;
+}
+
+function setTankProfile(id,profile) {
+  if (!Object.hasOwn(CORAL_PROFILES,profile)) return;
+  saveFleet({...fleet,tanks:fleet.tanks.map(tank => tank.id === id ?
+    {...tank,log:{...tank.log,profile}} : tank)});
 }
 
 function tanks() {
@@ -282,6 +343,9 @@ function tanks() {
     <div class="grid">${fleet.tanks.map(tank => `<article class="card"><h3>${esc(tank.log.name)}</h3>
       ${tank.id === fleet.active ? '<span class="pill good">Active tank</span>' :
       `<button data-tank="${esc(tank.id)}">Switch to this tank</button>`}
+      <div class="profile-pills" role="group" aria-label="Coral profile for ${esc(tank.log.name)}">
+      ${Object.entries(CORAL_PROFILES).map(([type,profile]) => `<button data-profile="${type}" data-profile-tank="${esc(tank.id)}" aria-pressed="${type===profileKey(tank.log)}">${coralIcon(type)}${profile.label}</button>`).join('')}
+      </div>
       <div class="actions tank-actions"><button data-rename="${esc(tank.id)}" aria-label="Rename ${esc(tank.log.name)}">Rename</button>
       <button class="danger" data-remove-tank="${esc(tank.id)}" aria-label="Delete ${esc(tank.log.name)}">Delete</button></div></article>`).join('')}</div>
     <form id="tank-form" class="panel stack"><h2>Add a tank</h2>
@@ -330,7 +394,7 @@ function overview() {
   const order = ['red','yellow','green','gray'];
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
   const count = color => items.filter(item => item.color === color).length;
-  return `<section class="hero"><div><h1>${esc(state.name)}</h1><p>Water parameters</p></div><button class="primary" data-add>Add water test</button></section>
+  return `<section class="hero"><div><h1>${esc(state.name)}</h1><p>${CORAL_PROFILES[profileKey(state)].label} reef · Water parameters</p></div><button class="primary" data-add>Add water test</button></section>
   <section aria-label="Reading summary" class="summary">
     ${[['green','Healthy'],['yellow','Needs attention'],['red','Fix immediately']].map(([color,label]) =>
       `<div><span class="dot ${color}" aria-hidden="true"></span><strong>${count(color)}</strong><span>${label}</span></div>`).join('')}
@@ -341,7 +405,7 @@ function overview() {
       <div class="value">${item.reading ? format(item.reading.value) : '—'} <span class="unit">${item.unit}</span></div>
       <div class="reading-meta"><span>${range(item.setting,item.unit)}</span>${item.reading ? `<time datetime="${item.reading.date}">${dateText(item.reading.date)}</time>` : ''}</div>
       ${nextStep(item) ? `<p class="next-step">${nextStep(item)}</p>` : ''}
-      <button data-history="${item.key}">View history</button></article>`).join('') || '<p>Enable a parameter under Targets &amp; backup to get started.</p>'}</div>
+      <button data-history="${item.key}">View history</button></article>`).join('') || '<p>Enable a parameter in Settings under Targets.</p>'}</div>
   </section>`;
 }
 
@@ -416,22 +480,26 @@ function urgentText({urgentLow,urgentHigh}) {
 function targets() {
   return `<section class="stack"><h1>Targets</h1><form id="targets-form" class="panel stack">
     <label>Tank name<input name="name" required maxlength="60" value="${esc(state.name)}"></label>
-    <p class="muted">Healthy ranges start with mixed-reef defaults. Outside the healthy range is Needs attention. The urgent cutoffs are app defaults for immediate confirmation, and livestock needs vary. Use a test interval to flag overdue readings.</p>
+    <p class="muted">This tank uses the <strong>${CORAL_PROFILES[profileKey(state)].label}</strong> profile. Change profiles under Tanks. Custom ranges stay with the tank when you switch profiles.</p>
     ${PARAMETERS.map(([key,name,unit]) => {
-      const {low,high,days,enabled} = config(key);
+      const {low,high,days,enabled,custom} = config(key);
       return `<div class="settings-row"><label class="check"><input name="${key}-enabled" type="checkbox" ${enabled?'checked':''}> Show ${name} ${unit ? '('+unit+')' : ''}</label>
       <div class="fields"><label>Minimum<input name="${key}-low" type="number" step="any" value="${low ?? ''}"></label>
       <label>Maximum<input name="${key}-high" type="number" step="any" value="${high ?? ''}"></label>
-      <label>Test interval (days)<input name="${key}-days" type="number" min="1" max="3650" step="1" value="${days ?? ''}"></label></div><p class="muted">Fix immediately · ${urgentText(config(key))}</p></div>`;
+      <label>Test interval (days)<input name="${key}-days" type="number" min="1" max="3650" step="1" value="${days ?? ''}"></label></div><p class="muted">Fix immediately · ${urgentText(config(key))}</p><div class="actions target-type"><span class="muted" data-target-source="${key}">${custom ? 'Custom range' : 'Profile range'}</span><button type="button" data-reset-target="${key}">Use profile range</button></div></div>`;
     }).join('')}
     <div><button class="primary">Save targets</button></div><p role="status" id="settings-message"></p></form></section>
-    <section class="panel stack"><h2>About the mixed-reef targets</h2>
-    <p>Use these as starting points for an established mixed reef. Nutrient goals vary with coral mix and feeding. Enter total ammonia for the ammonia check. Nitrite and silicate use attention alerts as trends to investigate.</p>
+    <section class="panel stack"><h2>About the coral profiles</h2>
+    <p>Soft uses wider nutrient and foundation ranges. SPS emphasizes stable alkalinity and narrower calcium, phosphate, and salinity ranges. Mixed sits between them. These are starting points for established reefs. Nutrient goals also vary with feeding and livestock. Enter total ammonia for the ammonia check. Nitrite and silicate use attention alerts as trends to investigate.</p>
     <p class="muted">Retest surprising results with a suitable kit before changing the tank. If the last test was days ago, take a fresh sample to see where the tank stands today.</p>
     <div class="source-links"><a href="https://g1.redseafish.com/reef-care-recipes/">Red Sea reef care recipes</a>
     <a href="https://www.reef2reef.com/ams/optimal-parameters-for-a-coral-reef-aquarium-by-randy-holmes-farley.79/">Holmes-Farley’s reef chemistry guide</a>
     <a href="https://www.reef2reef.com/ams/ammonia-is-our-friend.1062/">Holmes-Farley on total ammonia</a></div></section>
-    <section class="panel stack"><h2>Backup</h2><p>Export all tanks, readings, and targets or restore them from a backup file.</p>
+    `;
+}
+
+function backup() {
+  return `<section class="panel stack"><h1>Backup</h1><p>Export all tanks, readings, and targets or restore them from a backup file.</p>
     <div class="actions"><button id="export">Export backup</button><button id="import">Restore backup</button><input hidden id="backup" type="file" accept=".json,application/json"></div>
     <p role="status" id="backup-message"></p></section>`;
 }
@@ -505,8 +573,31 @@ renameForm.querySelector('#cancel-rename').onclick = () => renameDialog.close();
 
 document.addEventListener('click',event => {
   const button = event.target.closest('button');
+  const menu = document.querySelector('#settings-menu');
+  if (menu?.open && !menu.contains(event.target)) menu.open = false;
   if (!button) return;
-  if (button.dataset.view) { page=button.dataset.view; render(); window.scrollTo(0,0); }
+  if (button.dataset.view) {
+    page=button.dataset.view;
+    if (menu?.contains(button)) menu.querySelector('summary').focus();
+    if (menu) menu.open=false;
+    render();
+    window.scrollTo(0,0);
+  }
+  if (button.dataset.profile) {
+    try {
+      setTankProfile(button.dataset.profileTank,button.dataset.profile);
+      render();
+      main.querySelector('[data-profile-tank="' + CSS.escape(button.dataset.profileTank) + '"][data-profile="' + button.dataset.profile + '"]')?.focus();
+    } catch { alert('Could not save the coral profile in this browser.'); }
+  }
+  if (button.dataset.resetTarget) {
+    const key = button.dataset.resetTarget;
+    const target = profileTarget(key);
+    const form = button.form;
+    form.elements.namedItem(key+'-low').value = target.low ?? '';
+    form.elements.namedItem(key+'-high').value = target.high ?? '';
+    form.querySelector('[data-target-source="' + key + '"]').textContent = 'Profile range selected. Save to apply.';
+  }
   if (button.dataset.history) { selected=button.dataset.history; page='history'; render(); window.scrollTo(0,0); }
   if (button.dataset.rename) {
     const tank = fleet.tanks.find(item => item.id === button.dataset.rename);
@@ -585,11 +676,14 @@ main.addEventListener('submit',event => {
       event.target.elements.namedItem(key+'-low').focus();
       return;
     }
-    settings[key] = {enabled:data.has(key+'-enabled'),low,high,days:number(key+'-days')};
+    const preset = profileTarget(key);
+    const custom = (low !== null || high !== null) && (low !== preset.low || high !== preset.high);
+    settings[key] = {enabled:data.has(key+'-enabled'),low,high,days:number(key+'-days'),custom};
   }
   try {
     save({...state,name,settings});
-    message.textContent = 'Targets saved.';
+    render();
+    document.querySelector('#settings-message').textContent = 'Targets saved.';
   } catch { message.textContent = 'Could not save the targets in this browser.'; }
 });
 
@@ -663,6 +757,12 @@ function account() {
       ${cloud.conflict ? '<button data-cloud="reload">Load cloud version</button>' : ''}
       <button data-cloud="signout">Sign out</button>
     </div>
+    ${cloud.shareLink ? `<div class="invite-share stack"><h2>Invite people</h2>
+      <p class="muted">Share the same link with anyone you want to invite.</p>
+      <div class="actions"><button type="button" data-cloud="copy-invite">Copy invite link</button></div>
+      <label id="invite-link-label" hidden>Invite link<input id="invite-link" type="url" value="${esc(cloud.shareLink)}" readonly></label>
+      <p id="invite-copy-status" role="status"></p>
+    </div>` : ''}
     <p class="muted">The browser log stays separate. Import it to start a new cloud log, or export it while signed out for a backup.</p></section>`;
 }
 
@@ -754,6 +854,38 @@ async function changeSession(user) {
   } catch { current.message = 'The cached log could not be opened.'; }
   render();
   await syncCloud(current);
+  void loadShareLink(current);
+}
+
+async function loadShareLink(current) {
+  try {
+    const {data} = await cloudClient.auth.getSession();
+    if (data.session?.user.id !== current.id || cloud !== current) return;
+    const result = await fetch(CLOUD_URL + '/functions/v1/reef-log-share',{
+      method:'POST',headers:{apikey:CLOUD_KEY,Authorization:'Bearer ' + data.session.access_token},
+      cache:'no-store'
+    });
+    if (!result.ok || cloud !== current) return;
+    const {link} = await result.json();
+    if (cloud !== current || typeof link !== 'string' || !link.startsWith(REEF_URL + '#join=')) return;
+    current.shareLink = link;
+    if (!main.querySelector('form:focus-within')) refreshAccount();
+  } catch { /* The invite controls are optional, so account sync remains available. */ }
+}
+
+async function copyInviteLink() {
+  if (!cloud?.shareLink) return;
+  const status = document.querySelector('#invite-copy-status');
+  try {
+    await navigator.clipboard.writeText(cloud.shareLink);
+    status.textContent = 'Invite link copied.';
+  } catch {
+    document.querySelector('#invite-link-label').hidden = false;
+    const input = document.querySelector('#invite-link');
+    input.focus();
+    input.select();
+    status.textContent = 'Copy the selected invite link.';
+  }
 }
 
 function finishSharedInvite() {
@@ -852,6 +984,7 @@ async function redeemInvite(token,type) {
 
 async function accountAction(action) {
   try {
+    if (action === 'copy-invite') await copyInviteLink();
     if (action === 'show-signin') {
       finishSharedInvite();
       authMessage = '';
@@ -884,6 +1017,13 @@ async function accountAction(action) {
   }
 }
 
+document.addEventListener('keydown',event => {
+  const menu = document.querySelector('#settings-menu');
+  if (event.key === 'Escape' && menu?.open) {
+    menu.open = false;
+    menu.querySelector('summary').focus();
+  }
+});
 window.addEventListener('resize',draw);
 window.addEventListener('online',() => { if (cloud) void syncCloud(cloud); });
 window.addEventListener('focus',() => { if (cloud) void syncCloud(cloud); });
