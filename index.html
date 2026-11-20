@@ -80,8 +80,6 @@ dialog::backdrop{background:#020611bf}
 .settings-menu summary{list-style:none;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;border-radius:9px;padding:8px 12px;color:#b4c5d7;font-weight:650}
 .settings-menu summary::-webkit-details-marker{display:none}
 .settings-menu[open] summary,.settings-menu:has(button[aria-current]) summary{background:#153744;color:#71e5f2}
-.menu-icon{display:inline-block;width:14px;height:11px;border-block:1.5px solid currentColor;position:relative}
-.menu-icon::after{content:'';position:absolute;inset:3px 0 auto;border-top:1.5px solid currentColor}
 .settings-popover{position:absolute;right:0;top:calc(100% + 5px);z-index:5;display:grid;gap:3px;min-width:150px;padding:5px;background:#101827;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 22px #03061090}
 .settings-popover button{text-align:left}
 .profile-pills{display:flex;flex-wrap:wrap;gap:5px}
@@ -98,10 +96,19 @@ dialog::backdrop{background:#020611bf}
 }
 
 .invite-share{padding:15px;border:1px solid var(--line);border-radius:12px}.invite-share [hidden]{display:none}
+
+.brand{border:0;background:transparent;padding:6px 0;color:#f1f7ff;letter-spacing:.055em;font-size:1.23rem;font-weight:850}
+.brand:hover{color:#b5f7ff}
+.profile-pills button{gap:6px;padding:5px 9px}
+.profile-pills button svg{flex:none}
+.scan-panel{padding:12px;border:1px solid var(--line);border-radius:12px;background:#142533;gap:8px}
+.scan-panel [hidden]{display:none}
+.extra-parameters summary{cursor:pointer;color:#b5c7d9;font-weight:650;margin-bottom:6px}
+input[data-scanned]{border-color:#48d8ee}
 </style>
 </head>
 <body>
-<header><div class="bar"><div class="brand"><span>Reef</span> Log</div><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="tanks">Tanks</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings"><span aria-hidden="true" class="menu-icon"></span>Settings</summary><div class="settings-popover"><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
+<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLABS home"><span>REEF</span>LABS</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="tanks">Tanks</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
 <main id="main"></main>
 <dialog id="entry"><form id="test-form" class="stack"></form></dialog>
 <dialog id="rename-tank" aria-labelledby="rename-title">
@@ -135,11 +142,11 @@ const MIXED_REEF = {
 };
 const CORAL_PROFILES = {
   soft:{label:'Soft',ranges:{alk:[7.5,11],no3:[2,20],po4:[.03,.15],ca:[380,480],mg:[1250,1450]},
-    icon:'<circle cx="12" cy="12" r="2.2"/><path d="M12 9.8c-2-3.2-4.9-4.6-6.1-1.4-.5 1.5.6 2.7 3.9 3.6-3.5 1-4.1 3-2.2 4.7 1.8 1.5 3.3-.6 4.4-2.5 1.1 1.9 2.6 4 4.4 2.5 1.9-1.7 1.3-3.7-2.2-4.7 3.3-.9 4.4-2.1 3.9-3.6-1.2-3.2-4.1-1.8-6.1 1.4Z"/>'},
+    icon:'<path fill="currentColor" fill-opacity=".26" d="M3 10C3 6 7 5 11 5s9 1 9 5c0 3-5 4-9 4s-8-1-8-4Zm4 10h10l-3-2-1-4h-3l-1 4Z"/><path d="M3 10c3 2 11 3 17 0M6 7V4m3 2V3m4 2V2m4 4V3m2 5 2-2"/>'},
   mixed:{label:'Mixed',ranges:{},
-    icon:'<path d="M4 18h16M8 18v-5m0 2-3-2m3 0 3-4m4 9v-3"/><circle cx="15" cy="10" r="4"/><path d="M15 8v4m-2-2h4"/>'},
+    icon:'<path d="M2 21h20M6 21v-8l-3-3m3 6 5-5V8M6 13V6" stroke-width="2"/><path fill="currentColor" fill-opacity=".27" d="M10 15c0-2 3-4 6-4s6 2 6 4c0 2-4 3-6 3s-6-1-6-3Zm4 6 1-3h2l1 3Z"/><path d="M13 13v-3m3 2V8m3 4V9"/>'},
   sps:{label:'SPS',ranges:{alk:[7.5,9],salt:[34.5,35.5],no3:[1,10],po4:[.02,.08],ca:[410,450],mg:[1280,1400]},
-    icon:'<path d="M12 20V5m0 7-5-4V5m5 10 6-5V6M8 19l-4-3v-3m8-4 3-3V3m0 17 5-4v-2"/>'}
+    icon:'<path d="M6 22h12m-6 0V12m0 4-6-4V7m0 5-3-2V7m3 2 3-3V3m3 11 5-4V6m0 4 4-3V4m-4 3-3-4V2m-2 18-5-2-3-3m8 5 6-4 3-1v-3" stroke-width="2.2"/>'}
 };
 const STORAGE = 'reef-log-v1';
 const CLOUD_URL = 'https://gokemkztwbtuvyfsunml.supabase.co';
@@ -329,7 +336,7 @@ function render() {
 }
 
 function coralIcon(type) {
-  return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CORAL_PROFILES[type].icon}</svg>`;
+  return `<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CORAL_PROFILES[type].icon}</svg>`;
 }
 
 function setTankProfile(id,profile) {
@@ -509,9 +516,153 @@ function localDate(value) {
   return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);
 }
 
+const PHOTO_FIELDS = [
+  ['alk',/^(?:D[ .-]*ALK|ALKALINITY|ALK|DKH)(?=\s|[:=])/i],
+  ['salt',/^(?:SALINITY|SAL)(?=\s|[:=])/i],
+  ['ph',/^P\s*H(?=\s|[:=])/i],
+  ['no3',/^(?:NITRATE|NO[3₃])(?!\s*-\s*N)(?=\s|[:=])/i],
+  ['po4',/^(?:PHOSPHATE|PHOS|P[O0][4₄])(?!\s*-\s*P)(?=\s|[:=])/i],
+  ['ca',/^(?:CALCIUM|CA)(?=\s|[:=])/i],
+  ['mg',/^(?:MAGNESIUM|MG)(?=\s|[:=])/i],
+  ['no2',/^(?:NITRITE|NO[2₂])(?!\s*-\s*N)(?=\s|[:=])/i],
+  ['si',/^(?:SILICATE|SILICA|SIO[2₂])(?=\s|[:=])/i],
+  ['nh3',/^(?:TOTAL AMMONIA|AMMONIA|AMMO|NH[3₃])(?!\s*-\s*N)(?=\s|[:=])/i]
+];
+
+function scanResults(text) {
+  const readings = new Map();
+  const ambiguous = new Set();
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim().replace(/^[|*•]+\s*/,'');
+    const entry = PHOTO_FIELDS.find(([,label]) => label.test(line));
+    if (!entry) continue;
+    const [key,pattern] = entry;
+    const label = line.match(pattern)[0];
+    const rest = line.slice(label.length).trim()
+      .replace(/^\(\s*(?:NO[23₃₂]|PO[4₄]|Ca|Mg|NH[3₃](?:\s*[+/]\s*NH[4₄])?)\s*\)\s*/i,'');
+    const match = rest.match(/^(?:\(\s*(ppm|mg\s*\/\s*l|ppt|psu|dkh)\s*\)\s*)?[:=]?\s*(\d+(?:[.,]\s*\d+)?|[.,]\d+)\s*(ppm|mg\s*\/\s*l|ppt|psu|dkh)?\s*[|]*$/i);
+    if (!match) { ambiguous.add(key); continue; }
+    const units = [match[1],match[3]].filter(Boolean).map(unit => unit.replace(/\s/g,'').toLowerCase());
+    const expected = key === 'alk' ? ['dkh'] : key === 'salt' ? ['ppt','psu'] : key === 'ph' ? [] : ['ppm','mg/l'];
+    if (units.some(unit => !expected.includes(unit)) ||
+        (key === 'alk' && !units.length && !/^(?:D[ .-]*ALK|DKH)$/i.test(label))) {
+      ambiguous.add(key);
+      continue;
+    }
+    const value = Number(match[2].replace(',','.').replace(/\s/g,''));
+    const plausible = Number.isFinite(value) && value >= 0 &&
+      (key !== 'ph' || value <= 14) &&
+      (key !== 'salt' || (value >= 5 && value <= 80)) &&
+      (key !== 'alk' || value <= 35);
+    if (!plausible || (readings.has(key) && readings.get(key) !== value)) {
+      ambiguous.add(key);
+      continue;
+    }
+    readings.set(key,value);
+  }
+  for (const key of ambiguous) readings.delete(key);
+  return {readings,ambiguous};
+}
+
+let photoEngine;
+function getPhotoEngine() {
+  if (photoEngine) return photoEngine;
+  photoEngine = new Promise((resolve,reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';
+    script.onload = () => window.Tesseract?.createWorker ? resolve(window.Tesseract) : reject(Error('Scanner unavailable'));
+    script.onerror = () => { script.remove(); reject(Error('Scanner unavailable')); };
+    document.head.append(script);
+  }).catch(error => { photoEngine = null; throw error; });
+  return photoEngine;
+}
+
+async function photoCanvas(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const scale = Math.min(1,2200/Math.max(image.naturalWidth,image.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1,Math.round(image.naturalWidth*scale));
+    canvas.height = Math.max(1,Math.round(image.naturalHeight*scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    return canvas;
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function enablePhotoScan() {
+  const status = form.querySelector('#photo-status');
+  const photoButtons = [...form.querySelectorAll('[data-photo-picker]')];
+  const saveButton = form.querySelector('button.primary');
+  const previous = new Map();
+  for (const button of photoButtons) {
+    const picker = form.querySelector('#'+button.dataset.photoPicker);
+    button.onclick = () => picker.click();
+    picker.onchange = async () => {
+      const file = picker.files[0];
+      picker.value = '';
+      if (!file) return;
+      const current = () => dialog.open && status.isConnected;
+      let worker;
+      for (const control of [...photoButtons,saveButton]) control.disabled = true;
+      status.textContent = 'Preparing the scanner…';
+      try {
+        const [engine,canvas] = await Promise.all([getPhotoEngine(),photoCanvas(file)]);
+        if (!current()) return;
+        worker = await engine.createWorker('eng',1,{logger:event => {
+          if (current() && event.status === 'recognizing text') {
+            status.textContent = 'Reading photo… '+Math.round(event.progress*100)+'%';
+          }
+        }});
+        if (!current()) return;
+        await worker.setParameters({tessedit_pageseg_mode:engine.PSM.SINGLE_BLOCK});
+        let result = scanResults((await worker.recognize(canvas)).data.text);
+        if (result.readings.size < 3 && current()) {
+          status.textContent = 'Checking a second layout…';
+          await worker.setParameters({tessedit_pageseg_mode:engine.PSM.AUTO});
+          const alternate = scanResults((await worker.recognize(canvas)).data.text);
+          if (alternate.readings.size > result.readings.size) result = alternate;
+        }
+        if (!current()) return;
+        let count = 0;
+        for (const [key,value] of result.readings) {
+          const field = form.elements.namedItem(key);
+          if (!field || (field.value !== '' && field.value !== previous.get(key))) continue;
+          field.value = String(value);
+          field.dataset.scanned = '';
+          previous.set(key,field.value);
+          const details = field.closest('details');
+          if (details) details.open = true;
+          count++;
+        }
+        if (count) {
+          status.textContent = 'Filled '+count+' reading'+(count===1?'':'s')+'. Check the highlighted numbers before saving.'+
+            (result.ambiguous.size ? ' Some results need manual entry.' : '');
+        } else if (result.readings.size) {
+          status.textContent = 'The matching fields already have readings. Check them against the photo.';
+        } else {
+          status.textContent = 'No clear labeled readings found. Try a sharper photo or enter them manually.';
+        }
+      } catch {
+        if (current()) status.textContent = 'Could not scan this photo. Try a JPG or PNG with a connection, or enter the readings manually.';
+      } finally {
+        if (worker) { try { await worker.terminate(); } catch {} }
+        if (current()) for (const control of [...photoButtons,saveButton]) control.disabled = false;
+      }
+    };
+  }
+}
+
 function showEntry(key,row) {
-  const available = row || key ? PARAMETERS : active();
-  const choices = available.length ? available : PARAMETERS;
+  const choices = PARAMETERS;
+  const field = ([id,name,unit]) => `<label>${name}${unit ? ' ('+unit+')' : ''}<input type="number" step="any" name="${id}"></label>`;
+  const visible = choices.filter(([id]) => config(id).enabled || id === key);
+  const optional = choices.filter(([id]) => !config(id).enabled && id !== key);
   const preselected = row?.key || key || choices[0][0];
   form.innerHTML = `<h2 id="entry-title">${row ? 'Edit water test' : 'Add water test'}</h2>
     <p class="muted">Tank · ${esc(state.name)}</p>
@@ -519,8 +670,19 @@ function showEntry(key,row) {
     ${row ? `<label>Parameter<select name="parameter">${choices.map(([id,name,unit]) =>
       `<option value="${id}" ${id===preselected?'selected':''}>${name} ${unit}</option>`).join('')}</select></label>
       <label>Reading<input name="value" type="number" step="any" required value="${row.value}"></label>` :
-      `<p class="muted">Fill in the readings you took. Leave the rest blank.</p><div class="fields">${choices.map(([id,name,unit]) =>
-      `<label>${name} ${unit ? '('+unit+')' : ''}<input type="number" step="any" name="${id}"></label>`).join('')}</div>`}
+      `<div class="scan-panel stack">
+        <h3>Scan test results</h3>
+        <div class="actions">
+          <button type="button" data-photo-picker="test-photo">Upload photo</button>
+          <button type="button" data-photo-picker="test-camera">Take photo</button>
+        </div>
+        <input id="test-photo" type="file" accept="image/*" hidden>
+        <input id="test-camera" type="file" accept="image/*" capture="environment" hidden>
+        <p class="muted" id="photo-status" role="status">Use a clear photo of printed results or a screenshot. The photo stays on your device.</p>
+      </div>
+      <p class="muted">Review any scanned numbers or enter readings directly. Leave the rest blank.</p>
+      <div class="fields">${visible.map(field).join('')}</div>
+      ${optional.length ? `<details class="extra-parameters"><summary>Other parameters</summary><div class="fields">${optional.map(field).join('')}</div></details>` : ''}`}
     <label>Notes<textarea name="note" rows="2" maxlength="1000">${esc(row?.note ?? '')}</textarea></label>
     <p class="alert" role="alert" id="entry-error"></p><div class="actions"><button class="primary">Save ${row ? 'reading' : 'readings'}</button>
     <button type="button" id="cancel">Cancel</button></div>`;
@@ -545,6 +707,7 @@ function showEntry(key,row) {
     } catch { error.textContent = 'Could not save in this browser.'; }
   };
   form.querySelector('#cancel').onclick = () => dialog.close();
+  if (!row) enablePhotoScan();
   dialog.showModal();
   if (!row && key) form.elements.namedItem(key)?.focus();
 }
