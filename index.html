@@ -357,7 +357,8 @@ function parseSalinity(value,unit) {
 }
 
 function salinityDisplay(value) {
-  return salinityUnit() === 'SG' ? Number(salinityToGravity(value).toFixed(5)) : Number(value.toFixed(4));
+  const displayed = salinityUnit() === 'SG' ? salinityToGravity(value) : value;
+  return Number(displayed.toFixed(3));
 }
 
 function displayParameterValue(key,value) {
@@ -720,8 +721,11 @@ function historyView() {
 function draw() {
   const canvas = document.querySelector('#chart');
   if (!canvas) return;
-  const points = records(selected).slice(0,60).reverse().map(row => ({...row,value:displayParameterValue(selected,row.value)}));
-  const {low,high} = displayTarget(selected,config(selected));
+  const chartValue = value => selected === 'salt' && salinityUnit() === 'SG' && value !== null
+    ? salinityToGravity(value) : value;
+  const points = records(selected).slice(0,60).reverse().map(row => ({...row,value:chartValue(row.value)}));
+  const target = config(selected);
+  const low = chartValue(target.low), high = chartValue(target.high);
   const series = points.map(row => row.value);
   const min = Math.min(...series,...[low,high].filter(value => value !== null));
   const max = Math.max(...series,...[low,high].filter(value => value !== null));
@@ -736,7 +740,8 @@ function draw() {
   const top = 12, bottom = height-32;
   ctx.font = '12px system-ui';
   const ticks = Array.from({length:5},(_,i) => min-pad+i*(max-min+2*pad)/4);
-  const left = Math.max(45,...ticks.map(value => ctx.measureText(format(Number(value.toPrecision(6)))).width+10));
+  const tickLabel = value => selected === 'salt' ? format(Number(value.toFixed(3))) : format(Number(value.toPrecision(6)));
+  const left = Math.max(45,...ticks.map(value => ctx.measureText(tickLabel(value)).width+10));
   const right = width-12;
   const y = value => bottom-(value-min+pad)/(max-min+2*pad)*(bottom-top);
   const dateStart = Date.parse(points[0].date);
@@ -747,11 +752,14 @@ function draw() {
     ctx.fillStyle = '#193c3e';
     ctx.fillRect(left,start,right-left,(low === null ? bottom : y(low))-start);
   }
+  let lastLabel;
   for (const value of ticks) {
     ctx.strokeStyle = '#32445a';
     ctx.beginPath(); ctx.moveTo(left,y(value)); ctx.lineTo(right,y(value)); ctx.stroke();
     ctx.fillStyle = '#a3b5ca';
-    ctx.fillText(format(Number(value.toPrecision(6))),0,y(value)+4);
+    const label = tickLabel(value);
+    if (label !== lastLabel) ctx.fillText(label,0,y(value)+4);
+    lastLabel = label;
   }
   ctx.strokeStyle = '#48d8ee'; ctx.lineWidth = 2.5; ctx.beginPath();
   points.forEach((row,index) => index ? ctx.lineTo(x(row),y(row.value)) : ctx.moveTo(x(row),y(row.value)));
