@@ -51,7 +51,7 @@ button,input,select,textarea{background:#141f30;color:var(--ink);border-color:#3
 dialog::backdrop{background:#020611bf}
 @media(max-width:600px){
   .bar{min-height:58px}
-  .bar nav{position:fixed;bottom:0;left:0;right:0;z-index:2;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;background:#101827;border-top:1px solid var(--line);padding:7px 5px max(7px,env(safe-area-inset-bottom))}
+  .bar nav{position:fixed;bottom:0;left:0;right:0;z-index:2;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;background:#101827;border-top:1px solid var(--line);padding:7px 5px max(7px,env(safe-area-inset-bottom))}
   nav button{padding:9px 3px;font-size:.83rem}
   main{padding-bottom:86px}
 }
@@ -103,10 +103,22 @@ dialog::backdrop{background:#020611bf}
 input[data-scanned]{border-color:#48d8ee}
 
 #photo-transcript pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:12rem;overflow:auto;color:#b5c7d9}
+.dose-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;align-items:start}
+.dose-fields,.dose-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.dose-values strong{display:block;font-size:1.4rem}
+.dose-values span,.dose-legend{font-size:.85rem}
+.dose-map{position:relative;height:26px;margin:.75rem 8px;background:#253448;border-radius:8px}
+.dose-band,.dose-path,.dose-marker{position:absolute}
+.dose-band{inset-block:0;background:#20674f;border:1px solid #4adea0;border-radius:4px}
+.dose-path{height:2px;top:12px;background:#5ed9f3}
+.dose-marker{width:12px;height:12px;top:7px;transform:translateX(-50%);border:2px solid #101827;background:#fff;border-radius:50%}
+.dose-marker.projected{background:#5ed9f3;border-radius:3px;transform:translateX(-50%) rotate(45deg)}
+.dose-legend{margin:0;color:var(--muted)}
+@media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="tanks">Tanks</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
+<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="tanks">Tanks</button><button data-view="history">History</button><button data-view="dosing">Dosing</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
 <main id="main"></main>
 <dialog id="entry"><form id="test-form" class="stack"></form></dialog>
 <dialog id="rename-tank" aria-labelledby="rename-title">
@@ -172,7 +184,10 @@ const dialog = document.querySelector('#entry');
 const form = document.querySelector('#test-form');
 const renameDialog = document.querySelector('#rename-tank');
 const renameForm = document.querySelector('#rename-form');
-const defaults = () => ({version:1, name:'My reef', profile:'mixed', settings:{}, readings:[]});
+const DOSE_PARAMETERS = ['alk','ca','mg','no3','po4'];
+const DOSE_UNITS = ['mL','g','tsp','drops'];
+const VOLUME_UNITS = ['L','US gal'];
+const defaults = () => ({version:1, name:'My reef', profile:'mixed', settings:{}, readings:[], doses:[]});
 let fleet = {version:2, active:'first', tanks:[{id:'first',log:defaults()}]};
 let state = fleet.tanks[0].log;
 let loadError = '';
@@ -225,7 +240,36 @@ function validate(data) {
     ids.add(row.id);
     return {id:row.id,key:row.key,value:row.value,date:new Date(row.date).toISOString(),note:row.note};
   });
-  return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),settings,readings};
+  const doses = Object.hasOwn(data,'doses') ? validateDoses(data.doses) : [];
+  return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),settings,readings,doses};
+}
+
+function doseIncrease({amount,labelAmount,labelVolume,labelRise,tankVolume}) {
+  return amount / labelAmount * (labelVolume / tankVolume) * labelRise;
+}
+
+function validDose(dose) {
+  return DOSE_PARAMETERS.includes(dose.key) && DOSE_UNITS.includes(dose.unit) &&
+    VOLUME_UNITS.includes(dose.volumeUnit) &&
+    [dose.amount,dose.labelAmount,dose.labelVolume,dose.labelRise,dose.tankVolume,doseIncrease(dose)]
+      .every(value => Number.isFinite(value) && value > 0);
+}
+
+function validateDoses(rows) {
+  if (!Array.isArray(rows)) throw Error('Invalid dose history');
+  const ids = new Set();
+  return rows.map(row => {
+    if (!row || typeof row.id !== 'string' || !row.id || ids.has(row.id) ||
+        typeof row.brand !== 'string' || !row.brand.trim() || !Number.isFinite(Date.parse(row.date)) ||
+        !validDose(row)) throw Error('Invalid dose');
+    const {id,key,brand,amount,unit,labelAmount,labelVolume,labelRise,tankVolume,volumeUnit,date,baseline} = row;
+    if (baseline !== null && (!baseline || !Number.isFinite(baseline.value) ||
+        !Number.isFinite(Date.parse(baseline.date)) || !Number.isFinite(baseline.value + doseIncrease(row))))
+      throw Error('Invalid dose baseline');
+    ids.add(id);
+    return {id,key,brand:brand.trim().slice(0,100),amount,unit,labelAmount,labelVolume,labelRise,tankVolume,volumeUnit,
+      date:new Date(date).toISOString(),baseline:baseline && {value:baseline.value,date:new Date(baseline.date).toISOString()}};
+  });
 }
 const esc = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const format = value => Number(value).toLocaleString(undefined,{maximumFractionDigits:12});
@@ -323,15 +367,22 @@ function assess(reading,{low,high,days,urgentLow,urgentHigh}) {
 }
 
 function render() {
+  const doseForm = page === 'dosing' ? main.querySelector('#dose-form') : null;
+  const doseDraft = doseForm?.dataset?.tank === fleet.active ? new FormData(doseForm) : null;
   document.querySelectorAll('[data-view]').forEach(button => {
     if (button.dataset.view === page) button.setAttribute('aria-current','page');
     else button.removeAttribute('aria-current');
   });
   main.innerHTML = (loadError ? '<p class="alert" role="alert">' + esc(loadError) + '</p>' : '') +
-    ({overview,history:historyView,targets,backup,tanks,account}[page])() +
+    ({overview,history:historyView,dosing,targets,backup,tanks,account}[page])() +
     (cloud ? '<p class="footer">Manage cloud sync and backups in Settings.</p>' :
     '<p class="footer">Your log is stored in this browser. Sign in from Settings to sync across devices.</p>');
   if (page === 'history') draw();
+  if (page === 'dosing') {
+    const form = main.querySelector('#dose-form');
+    if (doseDraft) for (const [name,value] of doseDraft) form.elements[name].value = value;
+    updateDosePreview();
+  }
 }
 
 function setTankProfile(id,profile) {
@@ -410,6 +461,95 @@ function overview() {
       ${nextStep(item) ? `<p class="next-step">${nextStep(item)}</p>` : ''}
       <button data-history="${item.key}">View history</button></article>`).join('') || '<p>Enable a parameter in Settings under Targets.</p>'}</div>
   </section>`;
+}
+
+function dosing() {
+  const doses = [...state.doses].sort((a,b) => b.date.localeCompare(a.date));
+  const last = doses[0];
+  return `<section class="stack"><div><h1>Dosing</h1><p class="muted">${esc(state.name)} · Estimate a dose, then log the amount you added.</p></div>
+    <div class="dose-layout">
+      <form id="dose-form" class="panel stack" data-tank="${esc(fleet.active)}">
+        <h2>Dose details</h2>
+        <label>Brand and product<input name="brand" required maxlength="100" value="${esc(last?.brand ?? '')}" placeholder="e.g. Seachem Reef Advantage Calcium"></label>
+        <label>Parameter it raises<select name="key">${DOSE_PARAMETERS.map(key =>
+          `<option value="${key}" ${key===(last?.key ?? 'alk')?'selected':''}>${parameter(key)[1]}</option>`).join('')}</select></label>
+        <div class="dose-fields">
+          <label>Amount of product<input name="amount" type="number" inputmode="decimal" step="any" min="0" required></label>
+          <label>Product unit<select name="unit">${DOSE_UNITS.map(unit => `<option ${unit===last?.unit?'selected':''}>${unit}</option>`).join('')}</select></label>
+          <label>Actual water volume<input name="tankVolume" type="number" inputmode="decimal" step="any" min="0" value="${last?.tankVolume ?? ''}" required></label>
+          <label>Volume unit<select name="volumeUnit">${VOLUME_UNITS.map(unit => `<option ${unit===last?.volumeUnit?'selected':''}>${unit}</option>`).join('')}</select></label>
+        </div>
+        <h3>Product label strength</h3>
+        <p class="muted">Enter the label’s dose, the water volume it treats, and the rise it produces. Use the units selected above for both amounts and volumes.</p>
+        <div class="dose-fields">
+          <label>Label dose<input name="labelAmount" type="number" inputmode="decimal" step="any" min="0" required></label>
+          <label>Label water volume<input name="labelVolume" type="number" inputmode="decimal" step="any" min="0" required></label>
+          <label><span>Label rise (<span id="dose-rise-unit"></span>)</span><input name="labelRise" type="number" inputmode="decimal" step="any" min="0" required></label>
+        </div>
+        <div><button class="primary">Log dose added</button></div><p id="dose-message" role="status"></p>
+      </form>
+      <section class="panel stack" aria-labelledby="dose-projection-heading">
+        <h2 id="dose-projection-heading">Projection map</h2>
+        <div id="dose-preview" aria-live="polite" class="stack"></div>
+        <p class="muted">This estimate applies to the entered dose only. Follow the product label and retest to measure the actual change.</p>
+      </section>
+    </div>
+    <section class="panel history"><h2>Dose history</h2>${doses.map(dose => {
+      const [,name,unit] = parameter(dose.key);
+      const projection = dose.baseline ? `${doseNumber(dose.baseline.value)} → ${doseNumber(dose.baseline.value + doseIncrease(dose))} ${unit} estimated` : 'No baseline test';
+      return `<article><div><strong>${esc(dose.brand)}</strong><div>${name} · ${doseNumber(dose.amount)} ${dose.unit}</div>
+        <div class="muted">${projection} · ${dateText(dose.date)}</div></div>
+        <button class="danger" data-delete-dose="${esc(dose.id)}">Delete dose</button></article>`;
+    }).join('') || '<p class="muted">Doses you log for this tank appear here.</p>'}</section>
+  </section>`;
+}
+
+const doseNumber = value => value.toLocaleString(undefined,{maximumSignificantDigits:8});
+
+function readDose(form) {
+  const data = new FormData(form);
+  const dose = {key:data.get('key'),brand:data.get('brand').trim(),unit:data.get('unit'),volumeUnit:data.get('volumeUnit')};
+  for (const field of ['amount','labelAmount','labelVolume','labelRise','tankVolume']) dose[field] = Number(data.get(field));
+  return dose;
+}
+
+function projectionMap(current, projected, {low,high}) {
+  const values = [current,projected,low,high].filter(Number.isFinite);
+  const start = Math.min(...values);
+  const end = Math.max(...values);
+  const scale = Math.max(Math.abs(start),Math.abs(end),1);
+  const span = end / scale - start / scale;
+  const position = value => span > 0 ? 4 + ((value / scale - start / scale) / span) * 92 : 50;
+  const from = position(current);
+  const to = position(projected);
+  const left = low === null ? 0 : position(low);
+  const right = high === null ? 100 : position(high);
+  const band = low !== null || high !== null ? `<span class="dose-band" style="left:${left}%;width:${Math.max(0,right-left)}%"></span>` : '';
+  return `<div class="dose-map" aria-hidden="true">${band}<span class="dose-path" style="left:${from}%;width:${to-from}%"></span>
+    <span class="dose-marker" style="left:${from}%"></span><span class="dose-marker projected" style="left:${to}%"></span></div>
+    <p class="dose-legend" aria-hidden="true">● Latest test · ◆ Projected${band ? ' · Green target zone' : ''}</p>`;
+}
+
+function updateDosePreview() {
+  const form = main.querySelector('#dose-form');
+  const dose = readDose(form);
+  const [,name,unit] = parameter(dose.key);
+  const target = config(dose.key);
+  const latest = records(dose.key)[0];
+  const rise = validDose(dose) ? doseIncrease(dose) : null;
+  const result = latest && rise !== null ? latest.value + rise : null;
+  const projected = Number.isFinite(result) ? result : null;
+  const outcome = projected === null ? '' : target.low !== null && projected < target.low ? 'Below target' :
+    target.high !== null && projected > target.high ? 'Above target' : target.low === null && target.high === null ? '' : 'Within target';
+  form.querySelector('#dose-rise-unit').textContent = unit;
+  const test = latest ? `${doseNumber(latest.value)} ${unit}` : '—';
+  const estimate = projected === null ? '—' : `${doseNumber(projected)} ${unit}`;
+  main.querySelector('#dose-preview').innerHTML = `<div class="dose-values">
+    <div><span>Latest ${name} test</span><strong>${test}</strong>${latest ? `<span class="muted">${dateText(latest.date)}</span>` : ''}</div>
+    <div><span>Projected after dose</span><strong>${estimate}</strong>${rise !== null ? `<span class="muted">+${doseNumber(rise)} ${unit} estimated</span>` : ''}</div></div>
+    ${projected !== null ? projectionMap(latest.value,projected,target) : ''}
+    <p>${range(target,unit)}${outcome ? ` · <strong>${outcome}</strong>` : ''}</p>
+    ${!latest ? `<div><button type="button" data-add="${dose.key}">Add a baseline test</button></div>` : ''}`;
 }
 
 function historyView() {
@@ -843,7 +983,7 @@ document.addEventListener('click',event => {
   }
   if (button.dataset.removeTank) {
     const tank = fleet.tanks.find(item => item.id === button.dataset.removeTank);
-    const message = tank && 'Delete “' + tank.log.name + '” and all of its readings and targets? This cannot be undone.' +
+    const message = tank && 'Delete “' + tank.log.name + '” and all of its readings, doses and targets? This cannot be undone.' +
       (fleet.tanks.length === 1 ? ' A new empty tank will be created.' : '');
     if (message && confirm(message)) {
       try { removeTank(tank.id); render(); main.querySelector('#tank-form input')?.focus(); }
@@ -863,6 +1003,13 @@ document.addEventListener('click',event => {
     try { save({...state,readings:state.readings.filter(item => item.id !== button.dataset.delete)}); render(); }
     catch { alert('Could not save the change in this browser.'); }
   }
+  if (button.dataset.deleteDose && confirm('Delete this dose?')) {
+    try {
+      save({...state,doses:state.doses.filter(dose => dose.id !== button.dataset.deleteDose)});
+      render();
+      main.querySelector('#dose-message').textContent = 'Dose deleted.';
+    } catch { alert('Could not delete this dose.'); }
+  }
   if (button.dataset.cloud) void accountAction(button.dataset.cloud);
   if (button.id === 'export') {
     const url = URL.createObjectURL(new Blob([JSON.stringify(fleet,null,2)],{type:'application/json'}));
@@ -873,7 +1020,42 @@ document.addEventListener('click',event => {
   if (button.id === 'import') document.querySelector('#backup').click();
 });
 
+main.addEventListener('input',event => {
+  if (event.target.form?.id !== 'dose-form') return;
+  if (event.target.name === 'key') event.target.form.elements.labelRise.value = '';
+  if (event.target.name === 'unit') {
+    event.target.form.elements.amount.value = '';
+    event.target.form.elements.labelAmount.value = '';
+  }
+  if (event.target.name === 'volumeUnit') {
+    event.target.form.elements.labelVolume.value = '';
+    event.target.form.elements.tankVolume.value = '';
+  }
+  main.querySelector('#dose-message').textContent = '';
+  if (event.target.name !== 'brand') updateDosePreview();
+});
+
 main.addEventListener('submit',event => {
+  if (event.target.id === 'dose-form') {
+    event.preventDefault();
+    const dose = readDose(event.target);
+    const message = main.querySelector('#dose-message');
+    if (!dose.brand || !validDose(dose)) {
+      message.textContent = 'Enter a product name and positive values for the dose, strength and water volumes.';
+      return;
+    }
+    const latest = records(dose.key)[0];
+    const baseline = latest ? {value:latest.value,date:latest.date} : null;
+    const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
+    try {
+      const [entry] = validateDoses([{...dose,id,date:new Date().toISOString(),baseline}]);
+      save({...state,doses:[entry,...state.doses]});
+      event.target.elements.amount.value = '';
+      render();
+      main.querySelector('#dose-message').textContent = 'Dose logged.';
+    } catch { message.textContent = 'Could not save this dose. Check the entered values and try again.'; }
+    return;
+  }
   if (event.target.id === 'shared-signup') {
     event.preventDefault();
     void signUpWithSharedInvite(event.target);
