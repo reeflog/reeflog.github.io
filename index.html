@@ -187,6 +187,18 @@ const renameForm = document.querySelector('#rename-form');
 const DOSE_PARAMETERS = ['alk','ca','mg','no3','po4'];
 const DOSE_UNITS = ['mL','g','tsp','drops'];
 const VOLUME_UNITS = ['L','US gal'];
+const LITERS_PER_US_GALLON = 3.785411784;
+// Each reference volume is in liters. Alkalinity references use dKH.
+const DOSE_PRODUCTS = [
+  {name:'Seachem Reef Advantage Calcium',key:'ca',unit:'g',amount:5,liters:150,rise:12,source:'https://www.seachem.com/reef-adv-calcium.php'},
+  {name:'Seachem Reef Complete',key:'ca',unit:'mL',amount:5,liters:80,rise:10,source:'https://www.seachem.com/reef-complete.php'},
+  {name:'Seachem Reef Advantage Magnesium',key:'mg',unit:'g',amount:5,liters:80,rise:5,source:'https://www.seachem.com/reef-adv-magnesium.php'},
+  {name:'Seachem Reef Builder',key:'alk',unit:'g',amount:3,liters:150,rise:.7,source:'https://www.seachem.com/reef-builder.php'},
+  {name:'Seachem Reef Carbonate',key:'alk',unit:'mL',amount:5,liters:80,rise:.7,source:'https://www.seachem.com/reef-carbonate.php'},
+  {name:'Red Sea Foundation A Calcium+ (liquid)',key:'ca',unit:'mL',amount:1,liters:100,rise:2,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'},
+  {name:'Red Sea Foundation B KH/Alkalinity (liquid)',key:'alk',unit:'mL',amount:1,liters:100,rise:.1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'},
+  {name:'Red Sea Foundation C Magnesium (liquid)',key:'mg',unit:'mL',amount:1,liters:100,rise:1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'}
+];
 const defaults = () => ({version:1, name:'My reef', profile:'mixed', settings:{}, readings:[], doses:[]});
 let fleet = {version:2, active:'first', tanks:[{id:'first',log:defaults()}]};
 let state = fleet.tanks[0].log;
@@ -381,6 +393,7 @@ function render() {
   if (page === 'dosing') {
     const form = main.querySelector('#dose-form');
     if (doseDraft) for (const [name,value] of doseDraft) form.elements[name].value = value;
+    else fillDoseProduct(form);
     updateDosePreview();
   }
 }
@@ -470,7 +483,8 @@ function dosing() {
     <div class="dose-layout">
       <form id="dose-form" class="panel stack" data-tank="${esc(fleet.active)}">
         <h2>Dose details</h2>
-        <label>Brand and product<input name="brand" required maxlength="100" value="${esc(last?.brand ?? '')}" placeholder="e.g. Seachem Reef Advantage Calcium"></label>
+        <label>Brand and product<input name="brand" list="dose-products" autocomplete="off" required maxlength="100" value="${esc(last?.brand ?? '')}" placeholder="Start typing a brand or product"></label>
+        <datalist id="dose-products">${DOSE_PRODUCTS.map(product => `<option value="${esc(product.name)}"></option>`).join('')}</datalist>
         <label>Parameter it raises<select name="key">${DOSE_PARAMETERS.map(key =>
           `<option value="${key}" ${key===(last?.key ?? 'alk')?'selected':''}>${parameter(key)[1]}</option>`).join('')}</select></label>
         <div class="dose-fields">
@@ -480,7 +494,7 @@ function dosing() {
           <label>Volume unit<select name="volumeUnit">${VOLUME_UNITS.map(unit => `<option ${unit===last?.volumeUnit?'selected':''}>${unit}</option>`).join('')}</select></label>
         </div>
         <h3>Product label strength</h3>
-        <p class="muted">Enter the label’s dose, the water volume it treats, and the rise it produces. Use the units selected above for both amounts and volumes.</p>
+        <p id="dose-label-note" class="muted"></p>
         <div class="dose-fields">
           <label>Label dose<input name="labelAmount" type="number" inputmode="decimal" step="any" min="0" required></label>
           <label>Label water volume<input name="labelVolume" type="number" inputmode="decimal" step="any" min="0" required></label>
@@ -505,6 +519,32 @@ function dosing() {
 }
 
 const doseNumber = value => value.toLocaleString(undefined,{maximumSignificantDigits:8});
+const doseProduct = name => DOSE_PRODUCTS.find(product => product.name.toLowerCase() === name.trim().toLowerCase());
+const gallons = (volume,unit) => unit === 'L' ? volume / LITERS_PER_US_GALLON : volume;
+const productVolume = (product,unit) => unit === 'L' ? product.liters : gallons(product.liters,'L');
+
+function fillDoseProduct(form) {
+  const fields = form.elements;
+  const product = doseProduct(fields.brand.value);
+  if (!product) return false;
+  fields.key.value = product.key;
+  fields.unit.value = product.unit;
+  fields.labelAmount.value = product.amount;
+  fields.labelVolume.value = productVolume(product,fields.volumeUnit.value);
+  fields.labelRise.value = product.rise;
+  return true;
+}
+
+function matchesDoseProduct(dose,product) {
+  return product && dose.key === product.key && dose.unit === product.unit &&
+    dose.labelAmount === product.amount && dose.labelRise === product.rise &&
+    dose.labelVolume === productVolume(product,dose.volumeUnit);
+}
+
+function doseRate(amount,volume,volumeUnit,unit) {
+  const rate = amount / gallons(volume,volumeUnit);
+  return Number.isFinite(rate) && rate > 0 ? `${doseNumber(rate)} ${unit} per US gal` : '';
+}
 
 function readDose(form) {
   const data = new FormData(form);
@@ -536,6 +576,13 @@ function updateDosePreview() {
   const [,name,unit] = parameter(dose.key);
   const target = config(dose.key);
   const latest = records(dose.key)[0];
+  const product = doseProduct(dose.brand);
+  const labelRate = doseRate(dose.labelAmount,dose.labelVolume,dose.volumeUnit,dose.unit);
+  const enteredRate = doseRate(dose.amount,dose.tankVolume,dose.volumeUnit,dose.unit);
+  form.dataset.catalogStrength = matchesDoseProduct(dose,product) ? 'yes' : '';
+  main.querySelector('#dose-label-note').innerHTML = form.dataset.catalogStrength
+    ? `Strength filled from the <a href="${product.source}" target="_blank" rel="noopener noreferrer">manufacturer’s directions</a>. Check that it matches your label.`
+    : 'For a custom product, enter the label’s dose, the water volume it treats, and the rise it produces.';
   const rise = validDose(dose) ? doseIncrease(dose) : null;
   const result = latest && rise !== null ? latest.value + rise : null;
   const projected = Number.isFinite(result) ? result : null;
@@ -548,6 +595,8 @@ function updateDosePreview() {
     <div><span>Latest ${name} test</span><strong>${test}</strong>${latest ? `<span class="muted">${dateText(latest.date)}</span>` : ''}</div>
     <div><span>Projected after dose</span><strong>${estimate}</strong>${rise !== null ? `<span class="muted">+${doseNumber(rise)} ${unit} estimated</span>` : ''}</div></div>
     ${projected !== null ? projectionMap(latest.value,projected,target) : ''}
+    ${labelRate && dose.labelRise > 0 ? `<p class="muted">Label reference · ${labelRate} for a rise of ${doseNumber(dose.labelRise)} ${unit}</p>` : ''}
+    ${enteredRate ? `<p class="muted">Entered dose · ${enteredRate}</p>` : ''}
     <p>${range(target,unit)}${outcome ? ` · <strong>${outcome}</strong>` : ''}</p>
     ${!latest ? `<div><button type="button" data-add="${dose.key}">Add a baseline test</button></div>` : ''}`;
 }
@@ -1021,18 +1070,35 @@ document.addEventListener('click',event => {
 });
 
 main.addEventListener('input',event => {
-  if (event.target.form?.id !== 'dose-form') return;
-  if (event.target.name === 'key') event.target.form.elements.labelRise.value = '';
-  if (event.target.name === 'unit') {
-    event.target.form.elements.amount.value = '';
-    event.target.form.elements.labelAmount.value = '';
+  const {form,name} = event.target;
+  if (form?.id !== 'dose-form') return;
+  const fields = form.elements;
+  if (name === 'brand') {
+    if (fillDoseProduct(form)) {
+      fields.amount.value = '';
+    } else if (form.dataset.catalogStrength) {
+      fields.amount.value = '';
+      fields.labelAmount.value = '';
+      fields.labelVolume.value = '';
+      fields.labelRise.value = '';
+    }
   }
-  if (event.target.name === 'volumeUnit') {
-    event.target.form.elements.labelVolume.value = '';
-    event.target.form.elements.tankVolume.value = '';
+  if (name === 'key') fields.labelRise.value = '';
+  if (name === 'unit') {
+    fields.amount.value = '';
+    fields.labelAmount.value = '';
+  }
+  if (name === 'volumeUnit') {
+    const factor = fields.volumeUnit.value === 'L' ? LITERS_PER_US_GALLON : 1 / LITERS_PER_US_GALLON;
+    if (fields.tankVolume.value) fields.tankVolume.value *= factor;
+    if (form.dataset.catalogStrength) {
+      fields.labelVolume.value = productVolume(doseProduct(fields.brand.value),fields.volumeUnit.value);
+    } else if (fields.labelVolume.value) {
+      fields.labelVolume.value *= factor;
+    }
   }
   main.querySelector('#dose-message').textContent = '';
-  if (event.target.name !== 'brand') updateDosePreview();
+  updateDosePreview();
 });
 
 main.addEventListener('submit',event => {
