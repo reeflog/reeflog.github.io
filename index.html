@@ -143,7 +143,7 @@ const PARAMETERS = [
 // Inclusive healthy limits. Urgent limits are conservative retest triggers.
 const MIXED_REEF = {
   alk: {low:7.5,high:10,urgentLow:6,urgentHigh:13},
-  salt:{low:34,high:36,urgentLow:32,urgentHigh:38},
+  salt:{low:parseSalinity(1.024,'SG'),high:parseSalinity(1.026,'SG'),urgentLow:30,urgentHigh:38},
   ph:  {low:7.8,high:8.4,urgentLow:7.7,urgentHigh:8.6},
   no3: {low:1,high:10,urgentHigh:50},
   po4: {low:.02,high:.12},
@@ -156,8 +156,8 @@ const MIXED_REEF = {
 const CORAL_PROFILES = {
   soft:{label:'Soft',ranges:{alk:[7.5,11],no3:[2,20],po4:[.03,.15],ca:[380,480],mg:[1250,1450]}},
   mixed:{label:'Mixed',ranges:{}},
-  sps:{label:'SPS',ranges:{alk:[7.5,9],salt:[34.5,35.5],no3:[1,10],po4:[.02,.08],ca:[410,450],mg:[1280,1400]}},
-  fowlr:{label:'FOWLR',ranges:{alk:[7,12],salt:[30,35],ph:[8.1,8.4],no3:[null,30],po4:[null,.2],
+  sps:{label:'SPS',ranges:{alk:[7.5,9],no3:[1,10],po4:[.02,.08],ca:[410,450],mg:[1280,1400]}},
+  fowlr:{label:'FOWLR',ranges:{alk:[7,12],ph:[8.1,8.4],no3:[null,30],po4:[null,.2],
     ca:[350,450],mg:[1150,1350],no2:[null,.15],si:[null,3]},
     urgent:{salt:{urgentLow:27},no3:{urgentHigh:75},ca:{urgentLow:320}}}
 };
@@ -306,10 +306,11 @@ function profileTarget(key,log = state) {
   const mixed = MIXED_REEF[key];
   const profile = CORAL_PROFILES[profileKey(log)];
   const bounds = profile.ranges[key];
-  return bounds ? {...mixed,low:bounds[0],high:bounds[1],...profile.urgent?.[key]} : mixed;
+  return {...mixed,...(bounds && {low:bounds[0],high:bounds[1]}),...profile.urgent?.[key]};
 }
 
 function hasCustomTarget(key,setting) {
+  if (key === 'salt' && setting.low === 34 && setting.high === 36) return false;
   return (setting.low !== null || setting.high !== null) &&
     (setting.low !== MIXED_REEF[key].low || setting.high !== MIXED_REEF[key].high);
 }
@@ -805,7 +806,7 @@ function targets() {
     }).join('')}
     <div><button class="primary">Save targets</button></div><p role="status" id="settings-message"></p></form></section>
     <section class="panel stack"><h2>About tank profiles</h2>
-    <p>Soft uses wider nutrient and foundation ranges. SPS emphasizes stable alkalinity and narrower calcium, phosphate, and salinity ranges. Mixed sits between them. FOWLR (fish only with live rock) has higher nutrient ceilings and no preset minimum for nitrate or phosphate. These are starting points for established tanks. Nutrient goals also vary with feeding and livestock. Enter total ammonia for the ammonia check. Nitrite and silicate use attention alerts as trends to investigate.</p>
+    <p>Soft uses wider nutrient and foundation ranges. SPS emphasizes stable alkalinity and narrower calcium and phosphate ranges. Mixed sits between them. FOWLR (fish only with live rock) has higher nutrient ceilings and no preset minimum for nitrate or phosphate. All profiles use a default salinity target of 1.024–1.026 SG. These are starting points for established tanks. Nutrient goals also vary with feeding and livestock. Enter total ammonia for the ammonia check. Nitrite and silicate use attention alerts as trends to investigate.</p>
     <p class="muted">Retest surprising results with a suitable kit before changing the tank. If the last test was days ago, take a fresh sample to see where the tank stands today.</p>
     <div class="source-links"><a href="https://g1.redseafish.com/reef-care-recipes/">Red Sea reef care recipes</a>
     <a href="https://www.reef2reef.com/ams/optimal-parameters-for-a-coral-reef-aquarium-by-randy-holmes-farley.79/">Holmes-Farley’s reef chemistry guide</a>
