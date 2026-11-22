@@ -73,6 +73,8 @@ dialog::backdrop{background:#020611bf}
 .source-links{display:grid;gap:8px}.source-links a{color:#71e5f2}
 @media(max-width:460px){.summary>div{padding:8px;column-gap:6px}.summary>div>span:last-child{width:100%;font-size:.78rem}.reading-grid{grid-template-columns:1fr}}
 .tank-actions{margin-top:7px;padding-top:9px;border-top:1px solid var(--line)}
+.tank-volume{border-top:1px solid var(--line);margin-top:7px;padding-top:12px}
+.tank-volume [role=status]:empty{display:none}
 .danger{color:#ffadb7;border-color:#714052}
 .danger:hover{background:#422633}
 
@@ -199,7 +201,7 @@ const DOSE_PRODUCTS = [
   {name:'Red Sea Foundation B KH/Alkalinity (liquid)',key:'alk',unit:'mL',amount:1,liters:100,rise:.1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'},
   {name:'Red Sea Foundation C Magnesium (liquid)',key:'mg',unit:'mL',amount:1,liters:100,rise:1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'}
 ];
-const defaults = () => ({version:1, name:'My reef', profile:'mixed', settings:{}, readings:[], doses:[]});
+const defaults = () => ({version:1, name:'My reef', profile:'mixed', waterVolume:null, settings:{}, readings:[], doses:[]});
 let fleet = {version:2, active:'first', tanks:[{id:'first',log:defaults()}]};
 let state = fleet.tanks[0].log;
 let loadError = '';
@@ -253,7 +255,15 @@ function validate(data) {
     return {id:row.id,key:row.key,value:row.value,date:new Date(row.date).toISOString(),note:row.note};
   });
   const doses = Object.hasOwn(data,'doses') ? validateDoses(data.doses) : [];
-  return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),settings,readings,doses};
+  const waterVolume = validateWaterVolume(Object.hasOwn(data,'waterVolume') ? data.waterVolume : null);
+  return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),waterVolume,settings,readings,doses};
+}
+
+function validateWaterVolume(volume) {
+  if (volume === null) return null;
+  if (!volume || !Number.isFinite(volume.amount) || volume.amount <= 0 || !VOLUME_UNITS.includes(volume.unit))
+    throw Error('Enter a water volume greater than zero.');
+  return {amount:volume.amount,unit:volume.unit};
 }
 
 function doseIncrease({amount,labelAmount,labelVolume,labelRise,tankVolume}) {
@@ -392,8 +402,12 @@ function render() {
   if (page === 'history') draw();
   if (page === 'dosing') {
     const form = main.querySelector('#dose-form');
-    if (doseDraft) for (const [name,value] of doseDraft) form.elements[name].value = value;
-    else fillDoseProduct(form);
+    if (doseDraft) {
+      for (const [name,value] of doseDraft) form.elements[name].value = value;
+      const label = form.elements.labelVolume;
+      if (label.value && doseForm.dataset.volumeUnit !== form.dataset.volumeUnit)
+        label.value = Number(label.value) * (form.dataset.volumeUnit === 'L' ? LITERS_PER_US_GALLON : 1 / LITERS_PER_US_GALLON);
+    } else fillDoseProduct(form);
     updateDosePreview();
   }
 }
@@ -402,6 +416,18 @@ function setTankProfile(id,profile) {
   if (!Object.hasOwn(CORAL_PROFILES,profile)) return;
   saveFleet({...fleet,tanks:fleet.tanks.map(tank => tank.id === id ?
     {...tank,log:{...tank.log,profile}} : tank)});
+}
+
+function tankVolumeFields(volume) {
+  return `<div class="dose-fields">
+    <label>Water volume<input name="volume" type="number" inputmode="decimal" min="0" step="any" value="${volume?.amount ?? ''}"></label>
+    <label>Volume unit<select name="volumeUnit">${VOLUME_UNITS.map(unit => `<option value="${unit}" ${unit===(volume?.unit ?? 'US gal')?'selected':''}>${unit === 'L' ? 'Liters' : 'US gallons'}</option>`).join('')}</select></label>
+    </div><p class="muted">Enter the amount of water in the display tank plus any water in the sump at its normal running level.</p>`;
+}
+
+function readTankVolume(data) {
+  const amount = data.get('volume');
+  return validateWaterVolume(amount === '' ? null : {amount:Number(amount),unit:data.get('volumeUnit')});
 }
 
 function tanks() {
@@ -413,10 +439,15 @@ function tanks() {
       ${Object.entries(CORAL_PROFILES).map(([type,profile]) => `<button data-profile="${type}" data-profile-tank="${esc(tank.id)}" aria-pressed="${type===profileKey(tank.log)}">${profile.label}</button>`).join('')}
       </div>
       ${profileKey(tank.log) === 'fowlr' ? '<p class="muted">Fish only with live rock</p>' : ''}
+      <form class="tank-volume stack" data-volume-tank="${esc(tank.id)}" aria-label="Water volume for ${esc(tank.log.name)}">
+        ${tankVolumeFields(tank.log.waterVolume)}
+        <div><button>Save volume</button></div><p role="status"></p>
+      </form>
       <div class="actions tank-actions"><button data-rename="${esc(tank.id)}" aria-label="Rename ${esc(tank.log.name)}">Rename</button>
       <button class="danger" data-remove-tank="${esc(tank.id)}" aria-label="Delete ${esc(tank.log.name)}">Delete</button></div></article>`).join('')}</div>
     <form id="tank-form" class="panel stack"><h2>Add a tank</h2>
       <label>Tank name<input name="name" required maxlength="60"></label>
+      ${tankVolumeFields(null)}
       <div><button class="primary">Add tank</button></div><p id="tank-message" role="status"></p>
     </form></section>`;
 }
@@ -479,10 +510,14 @@ function overview() {
 function dosing() {
   const doses = [...state.doses].sort((a,b) => b.date.localeCompare(a.date));
   const last = doses[0];
+  const waterVolume = state.waterVolume;
+  const volumeUnit = waterVolume?.unit ?? 'L';
   return `<section class="stack"><div><h1>Dosing</h1><p class="muted">${esc(state.name)} · Estimate a dose, then log the amount you added.</p></div>
     <div class="dose-layout">
-      <form id="dose-form" class="panel stack" data-tank="${esc(fleet.active)}">
+      <form id="dose-form" class="panel stack" data-tank="${esc(fleet.active)}" data-volume-unit="${volumeUnit}">
         <h2>Dose details</h2>
+        <div class="actions"><p>${waterVolume ? `System water volume · <strong>${doseNumber(waterVolume.amount)} ${volumeUnit}</strong>` : 'Set the tank’s water volume to calculate and log doses.'}</p>
+          <button type="button" data-view="tanks">${waterVolume ? 'Edit in Tanks' : 'Set volume in Tanks'}</button></div>
         <label>Brand and product<input name="brand" list="dose-products" autocomplete="off" required maxlength="100" value="${esc(last?.brand ?? '')}" placeholder="Start typing a brand or product"></label>
         <datalist id="dose-products">${DOSE_PRODUCTS.map(product => `<option value="${esc(product.name)}"></option>`).join('')}</datalist>
         <label>Parameter it raises<select name="key">${DOSE_PARAMETERS.map(key =>
@@ -490,17 +525,15 @@ function dosing() {
         <div class="dose-fields">
           <label>Amount of product<input name="amount" type="number" inputmode="decimal" step="any" min="0" required></label>
           <label>Product unit<select name="unit">${DOSE_UNITS.map(unit => `<option ${unit===last?.unit?'selected':''}>${unit}</option>`).join('')}</select></label>
-          <label>Actual water volume<input name="tankVolume" type="number" inputmode="decimal" step="any" min="0" value="${last?.tankVolume ?? ''}" required></label>
-          <label>Volume unit<select name="volumeUnit">${VOLUME_UNITS.map(unit => `<option ${unit===last?.volumeUnit?'selected':''}>${unit}</option>`).join('')}</select></label>
         </div>
         <h3>Product label strength</h3>
         <p id="dose-label-note" class="muted"></p>
         <div class="dose-fields">
           <label>Label dose<input name="labelAmount" type="number" inputmode="decimal" step="any" min="0" required></label>
-          <label>Label water volume<input name="labelVolume" type="number" inputmode="decimal" step="any" min="0" required></label>
+          <label>Label water volume (${volumeUnit})<input name="labelVolume" type="number" inputmode="decimal" step="any" min="0" required></label>
           <label><span>Label rise (<span id="dose-rise-unit"></span>)</span><input name="labelRise" type="number" inputmode="decimal" step="any" min="0" required></label>
         </div>
-        <div><button class="primary">Log dose added</button></div><p id="dose-message" role="status"></p>
+        <div><button class="primary" ${waterVolume ? '' : 'disabled'}>Log dose added</button></div><p id="dose-message" role="status"></p>
       </form>
       <section class="panel stack" aria-labelledby="dose-projection-heading">
         <h2 id="dose-projection-heading">Projection map</h2>
@@ -530,7 +563,7 @@ function fillDoseProduct(form) {
   fields.key.value = product.key;
   fields.unit.value = product.unit;
   fields.labelAmount.value = product.amount;
-  fields.labelVolume.value = productVolume(product,fields.volumeUnit.value);
+  fields.labelVolume.value = productVolume(product,form.dataset.volumeUnit);
   fields.labelRise.value = product.rise;
   return true;
 }
@@ -548,8 +581,9 @@ function doseRate(amount,volume,volumeUnit,unit) {
 
 function readDose(form) {
   const data = new FormData(form);
-  const dose = {key:data.get('key'),brand:data.get('brand').trim(),unit:data.get('unit'),volumeUnit:data.get('volumeUnit')};
-  for (const field of ['amount','labelAmount','labelVolume','labelRise','tankVolume']) dose[field] = Number(data.get(field));
+  const dose = {key:data.get('key'),brand:data.get('brand').trim(),unit:data.get('unit'),
+    volumeUnit:state.waterVolume?.unit ?? 'L',tankVolume:state.waterVolume?.amount ?? 0};
+  for (const field of ['amount','labelAmount','labelVolume','labelRise']) dose[field] = Number(data.get(field));
   return dose;
 }
 
@@ -1088,15 +1122,6 @@ main.addEventListener('input',event => {
     fields.amount.value = '';
     fields.labelAmount.value = '';
   }
-  if (name === 'volumeUnit') {
-    const factor = fields.volumeUnit.value === 'L' ? LITERS_PER_US_GALLON : 1 / LITERS_PER_US_GALLON;
-    if (fields.tankVolume.value) fields.tankVolume.value *= factor;
-    if (form.dataset.catalogStrength) {
-      fields.labelVolume.value = productVolume(doseProduct(fields.brand.value),fields.volumeUnit.value);
-    } else if (fields.labelVolume.value) {
-      fields.labelVolume.value *= factor;
-    }
-  }
   main.querySelector('#dose-message').textContent = '';
   updateDosePreview();
 });
@@ -1106,6 +1131,10 @@ main.addEventListener('submit',event => {
     event.preventDefault();
     const dose = readDose(event.target);
     const message = main.querySelector('#dose-message');
+    if (!state.waterVolume) {
+      message.textContent = 'Set the tank’s water volume in Tanks first.';
+      return;
+    }
     if (!dose.brand || !validDose(dose)) {
       message.textContent = 'Enter a product name and positive values for the dose, strength and water volumes.';
       return;
@@ -1137,13 +1166,31 @@ main.addEventListener('submit',event => {
     void signInWithEmail(event.target);
     return;
   }
+  if (event.target.dataset?.volumeTank) {
+    event.preventDefault();
+    const form = event.target;
+    const message = form.querySelector('[role=status]');
+    let waterVolume;
+    try { waterVolume = readTankVolume(new FormData(form)); }
+    catch (error) { message.textContent = error.message; return; }
+    try {
+      saveFleet({...fleet,tanks:fleet.tanks.map(tank => tank.id === form.dataset.volumeTank ?
+        {...tank,log:{...tank.log,waterVolume}} : tank)});
+      message.textContent = waterVolume ? 'Water volume saved.' : 'Water volume cleared.';
+    } catch { message.textContent = 'Could not save the water volume. Try again.'; }
+    return;
+  }
   if (event.target.id === 'tank-form') {
     event.preventDefault();
-    const name = new FormData(event.target).get('name').trim();
+    const data = new FormData(event.target);
+    const name = data.get('name').trim();
     const message = document.querySelector('#tank-message');
     if (!name) { message.textContent = 'Enter a tank name.'; return; }
+    let waterVolume;
+    try { waterVolume = readTankVolume(data); }
+    catch (error) { message.textContent = error.message; return; }
     const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
-    try { activate({...fleet,active:id,tanks:[...fleet.tanks,{id,log:{...defaults(),name}}]}); }
+    try { activate({...fleet,active:id,tanks:[...fleet.tanks,{id,log:{...defaults(),name,waterVolume}}]}); }
     catch { message.textContent = 'Could not save the tank in this browser.'; }
     return;
   }
