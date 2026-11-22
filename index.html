@@ -202,7 +202,7 @@ const DOSE_PRODUCTS = [
   {name:'Red Sea Foundation B KH/Alkalinity (liquid)',key:'alk',unit:'mL',amount:1,liters:100,rise:.1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'},
   {name:'Red Sea Foundation C Magnesium (liquid)',key:'mg',unit:'mL',amount:1,liters:100,rise:1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'}
 ];
-const defaults = () => ({version:1, name:'My reef', profile:'mixed', waterVolume:null, settings:{}, readings:[], doses:[]});
+const defaults = () => ({version:1, name:'My reef', profile:'mixed', salinityUnit:'SG', waterVolume:null, settings:{}, readings:[], doses:[]});
 let fleet = {version:2, active:'first', tanks:[{id:'first',log:defaults()}]};
 let state = fleet.tanks[0].log;
 let loadError = '';
@@ -257,7 +257,8 @@ function validate(data) {
   });
   const doses = Object.hasOwn(data,'doses') ? validateDoses(data.doses) : [];
   const waterVolume = validateWaterVolume(Object.hasOwn(data,'waterVolume') ? data.waterVolume : null);
-  return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),waterVolume,settings,readings,doses};
+  return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),salinityUnit:data.salinityUnit === 'ppt' ? 'ppt' : 'SG',
+    waterVolume,settings,readings,doses};
 }
 
 function validateWaterVolume(volume) {
@@ -328,8 +329,47 @@ function config(key) {
   };
 }
 const records = key => state.readings.filter(row => row.key === key).sort((a,b) => b.date.localeCompare(a.date));
-const active = () => PARAMETERS.filter(([key]) => config(key).enabled);
-const parameter = key => PARAMETERS.find(item => item[0] === key);
+const active = () => PARAMETERS.filter(([key]) => config(key).enabled).map(([key]) => parameter(key));
+const salinityUnit = () => state.salinityUnit === 'ppt' ? 'ppt' : 'SG';
+const parameter = key => key === 'salt' ? ['salt','Salinity',salinityUnit()] : PARAMETERS.find(item => item[0] === key);
+
+// UNESCO EOS-80 at atmospheric pressure, with seawater and pure water both at 25 °C.
+function salinityToGravity(ppt) {
+  const t = 25;
+  const water = 999.842594 + t*(.06793952 + t*(-.00909529 + t*(.0001001685 + t*(-.000001120083 + t*.000000006536332))));
+  const a = .824493 + t*(-.0040899 + t*(.000076438 + t*(-.00000082467 + t*.0000000053875)));
+  const b = -.00572466 + t*(.00010227 - t*.0000016546);
+  return 1 + (a*ppt + b*ppt**1.5 + .00048314*ppt**2)/water;
+}
+
+function parseSalinity(value,unit) {
+  if (!Number.isFinite(value)) return NaN;
+  if (unit === 'ppt') return value >= 0 && value <= 80 ? value : NaN;
+  if (value < 1 || value > salinityToGravity(80)) return NaN;
+  if (value === 1) return 0;
+  let low = 0, high = 80;
+  for (let i=0;i<45;i++) {
+    const mid = (low+high)/2;
+    if (salinityToGravity(mid) < value) low = mid;
+    else high = mid;
+  }
+  return (low+high)/2;
+}
+
+function salinityDisplay(value) {
+  return salinityUnit() === 'SG' ? Number(salinityToGravity(value).toFixed(5)) : Number(value.toFixed(4));
+}
+
+function displayParameterValue(key,value) {
+  return key === 'salt' && Number.isFinite(value) ? salinityDisplay(value) : value;
+}
+
+function displayTarget(key,target) {
+  if (key !== 'salt') return target;
+  const {low,high,urgentLow,urgentHigh} = target;
+  return {...target,low:displayParameterValue(key,low),high:displayParameterValue(key,high),
+    urgentLow:displayParameterValue(key,urgentLow),urgentHigh:displayParameterValue(key,urgentHigh)};
+}
 
 function saveFleet(next) {
   if (cloud) {
@@ -493,7 +533,7 @@ function overview() {
   const items = active().map(([key,name,unit]) => {
     const setting = config(key);
     const reading = records(key)[0];
-    return {key,name,unit,reading,setting,...assess(reading,setting)};
+    return {key,name,unit,reading,setting:displayTarget(key,setting),...assess(reading,setting)};
   });
   const order = ['red','yellow','green','gray'];
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
@@ -506,7 +546,7 @@ function overview() {
   <section><div class="section-head"><h2>Latest readings</h2><button data-view="targets">View targets</button></div>
     <div class="grid reading-grid">${items.map(item => `<article class="card reading-card" data-status="${item.color}">
       <div class="reading-head"><h3>${item.name}</h3><span class="indicator"><span class="dot ${item.color}" aria-hidden="true"></span>${item.label}</span></div>
-      <div class="value">${item.reading ? format(item.reading.value) : '—'} <span class="unit">${item.unit}</span></div>
+      <div class="value">${item.reading ? format(displayParameterValue(item.key,item.reading.value)) : '—'} <span class="unit">${item.unit}</span></div>
       <div class="reading-meta"><span>${range(item.setting,item.unit)}</span>${item.reading ? `<time datetime="${item.reading.date}">${dateText(item.reading.date)}</time>` : ''}</div>
       ${nextStep(item) ? `<p class="next-step">${nextStep(item)}</p>` : ''}
       <button data-history="${item.key}">View history</button></article>`).join('') || '<p>Enable a parameter in Settings under Targets.</p>'}</div>
@@ -672,20 +712,20 @@ function historyView() {
   return `<section><div class="section-head"><h1>History</h1><button class="primary" data-add="${key}">Add water test</button></div>
     <div class="panel"><p class="muted">${esc(state.name)}</p><label>Parameter<select id="history-filter">${PARAMETERS.map(([id,label]) => `<option value="${id}" ${id===key?'selected':''}>${label}</option>`).join('')}</select></label>
     ${readings.length ? `<canvas class="chart" id="chart" role="img" aria-label="${name} trend. Values are listed below."></canvas>
-    <p class="muted">${range(config(key),unit)} · Latest ${Math.min(readings.length,60)} plotted</p>` : '<p class="muted">No readings for this parameter yet.</p>'}</div></section>
-    <section class="panel history"><h2>${name} readings</h2>${readings.map(row => `<article><div><strong>${format(row.value)} ${unit}</strong><div class="muted">${dateText(row.date)}</div>
+    <p class="muted">${range(displayTarget(key,config(key)),unit)} · Latest ${Math.min(readings.length,60)} plotted</p>` : '<p class="muted">No readings for this parameter yet.</p>'}</div></section>
+    <section class="panel history"><h2>${name} readings</h2>${readings.map(row => `<article><div><strong>${format(displayParameterValue(key,row.value))} ${unit}</strong><div class="muted">${dateText(row.date)}</div>
     ${row.note ? `<p class="note">${esc(row.note)}</p>` : ''}</div><div class="actions"><button data-edit="${esc(row.id)}">Edit</button><button data-delete="${esc(row.id)}">Delete</button></div></article>`).join('') || '<p class="muted">Once saved, tests appear here.</p>'}</section>`;
 }
 
 function draw() {
   const canvas = document.querySelector('#chart');
   if (!canvas) return;
-  const points = records(selected).slice(0,60).reverse();
-  const {low,high} = config(selected);
+  const points = records(selected).slice(0,60).reverse().map(row => ({...row,value:displayParameterValue(selected,row.value)}));
+  const {low,high} = displayTarget(selected,config(selected));
   const series = points.map(row => row.value);
   const min = Math.min(...series,...[low,high].filter(value => value !== null));
   const max = Math.max(...series,...[low,high].filter(value => value !== null));
-  const pad = (max-min)*.12 || Math.max(Math.abs(max)*.04,.01);
+  const pad = (max-min)*.12 || (selected === 'salt' && salinityUnit() === 'SG' ? .0001 : Math.max(Math.abs(max)*.04,.01));
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const {width,height} = canvas.getBoundingClientRect();
@@ -735,15 +775,25 @@ function urgentText({urgentLow,urgentHigh}) {
 }
 
 function targets() {
-  return `<section class="stack"><h1>Targets</h1><form id="targets-form" class="panel stack">
+  return `<section class="stack"><h1>Targets</h1>
+    <form id="salinity-units" class="panel stack"><h2>Salinity units</h2>
+      <label>Display and enter salinity as<select name="salinityUnit">
+        <option value="SG" ${salinityUnit()==='SG'?'selected':''}>Specific gravity (SG)</option>
+        <option value="ppt" ${salinityUnit()==='ppt'?'selected':''}>Parts per thousand (ppt)</option>
+      </select></label>
+      <p class="muted">Conversions use the seawater and freshwater densities at 25 °C.</p>
+      <div><button>Save salinity unit</button></div><p role="status" id="salinity-message"></p>
+    </form><form id="targets-form" class="panel stack">
     <label>Tank name<input name="name" required maxlength="60" value="${esc(state.name)}"></label>
     <p class="muted">This tank uses the <strong>${CORAL_PROFILES[profileKey(state)].label}</strong> profile. Change profiles under Tanks. Custom ranges stay with the tank when you switch profiles.</p>
-    ${PARAMETERS.map(([key,name,unit]) => {
-      const {low,high,days,enabled,custom} = config(key);
+    ${PARAMETERS.map(([key]) => {
+      const [,name,unit] = parameter(key);
+      const setting = displayTarget(key,config(key));
+      const {low,high,days,enabled,custom} = setting;
       return `<div class="settings-row"><label class="check"><input name="${key}-enabled" type="checkbox" ${enabled?'checked':''}> Show ${name} ${unit ? '('+unit+')' : ''}</label>
       <div class="fields"><label>Minimum<input name="${key}-low" type="number" step="any" value="${low ?? ''}"></label>
       <label>Maximum<input name="${key}-high" type="number" step="any" value="${high ?? ''}"></label>
-      <label>Test interval (days)<input name="${key}-days" type="number" min="1" max="3650" step="1" value="${days ?? ''}"></label></div><p class="muted">Fix immediately · ${urgentText(config(key))}</p><div class="actions target-type"><span class="muted" data-target-source="${key}">${custom ? 'Custom range' : 'Profile range'}</span><button type="button" data-reset-target="${key}">Use profile range</button></div></div>`;
+      <label>Test interval (days)<input name="${key}-days" type="number" min="1" max="3650" step="1" value="${days ?? ''}"></label></div><p class="muted">Fix immediately · ${urgentText(setting)}</p><div class="actions target-type"><span class="muted" data-target-source="${key}">${custom ? 'Custom range' : 'Profile range'}</span><button type="button" data-reset-target="${key}">Use profile range</button></div></div>`;
     }).join('')}
     <div><button class="primary">Save targets</button></div><p role="status" id="settings-message"></p></form></section>
     <section class="panel stack"><h2>About tank profiles</h2>
@@ -769,7 +819,7 @@ function localDate(value) {
 
 const PHOTO_FIELDS = [
   ['alk',/^(?:D[ .-]*ALK|ALKALINITY|ALK|DKH)(?=\s|[:=])/i],
-  ['salt',/^(?:SALINITY|SAL)(?=\s|[:=])/i],
+  ['salt',/^(?:SALINITY|SAL|SPECIFIC GRAVITY|SG)(?=\s|[:=])/i],
   ['ph',/^P\s*H(?=\s|[:=])/i],
   ['no3',/^(?:NITRATE|NO[3₃])(?!\s*-\s*N)(?=\s|[:=])/i],
   ['po4',/^(?:PHOSPHATE|PHOS|P[O0][4₄])(?!\s*-\s*P)(?=\s|[:=])/i],
@@ -791,16 +841,18 @@ function scanResults(text) {
     const label = line.match(pattern)[0];
     const rest = line.slice(label.length).trim()
       .replace(/^\(\s*(?:NO[23₃₂]|PO[4₄]|Ca|Mg|NH[3₃](?:\s*[+/]\s*NH[4₄])?)\s*\)\s*/i,'');
-    const match = rest.match(/^(?:\(\s*(ppm|mg\s*\/\s*l|ppt|psu|dkh)\s*\)\s*)?[:=]?\s*(\d+(?:[.,]\s*\d+)?|[.,]\d+)\s*(ppm|mg\s*\/\s*l|ppt|psu|dkh)?\s*[|]*$/i);
+    const match = rest.match(/^(?:\(\s*(ppm|mg\s*\/\s*l|ppt|psu|dkh|sg)\s*\)\s*)?[:=]?\s*(\d+(?:[.,]\s*\d+)?|[.,]\d+)\s*(ppm|mg\s*\/\s*l|ppt|psu|dkh|sg)?\s*[|]*$/i);
     if (!match) { ambiguous.add(key); continue; }
     const units = [match[1],match[3]].filter(Boolean).map(unit => unit.replace(/\s/g,'').toLowerCase());
-    const expected = key === 'alk' ? ['dkh'] : key === 'salt' ? ['ppt','psu'] : key === 'ph' ? [] : ['ppm','mg/l'];
+    const gravity = key === 'salt' && (units.includes('sg') || /^(?:SG|SPECIFIC GRAVITY)$/i.test(label));
+    const expected = key === 'alk' ? ['dkh'] : key === 'salt' ? (gravity ? ['sg'] : ['ppt','psu']) : key === 'ph' ? [] : ['ppm','mg/l'];
     if (units.some(unit => !expected.includes(unit)) ||
         (key === 'alk' && !units.length && !/^(?:D[ .-]*ALK|DKH)$/i.test(label))) {
       ambiguous.add(key);
       continue;
     }
-    const value = Number(match[2].replace(',','.').replace(/\s/g,''));
+    const measured = Number(match[2].replace(',','.').replace(/\s/g,''));
+    const value = gravity ? parseSalinity(measured,'SG') : measured;
     const plausible = Number.isFinite(value) && value >= 0 &&
       (key !== 'ph' || value <= 14) &&
       (key !== 'salt' || (value >= 5 && value <= 80)) &&
@@ -961,7 +1013,7 @@ function enablePhotoScan() {
         for (const [key,value] of result.readings) {
           const field = form.elements.namedItem(key);
           if (!field || (field.value !== '' && field.value !== previous.get(key))) continue;
-          field.value = String(value);
+          field.value = String(displayParameterValue(key,value));
           field.dataset.scanned = '';
           previous.set(key,field.value);
           const details = field.closest('details');
@@ -987,7 +1039,7 @@ function enablePhotoScan() {
 }
 
 function showEntry(key,row) {
-  const choices = PARAMETERS;
+  const choices = PARAMETERS.map(([id]) => parameter(id));
   const field = ([id,name,unit]) => `<label>${name}${unit ? ' ('+unit+')' : ''}<input type="number" step="any" name="${id}"></label>`;
   const visible = choices.filter(([id]) => config(id).enabled || id === key);
   const optional = choices.filter(([id]) => !config(id).enabled && id !== key);
@@ -997,7 +1049,7 @@ function showEntry(key,row) {
     <label>Test date and time<input type="datetime-local" name="date" required value="${localDate(row?.date ?? Date.now())}"></label>
     ${row ? `<label>Parameter<select name="parameter">${choices.map(([id,name,unit]) =>
       `<option value="${id}" ${id===preselected?'selected':''}>${name} ${unit}</option>`).join('')}</select></label>
-      <label>Reading<input name="value" type="number" step="any" required value="${row.value}"></label>` :
+      <label>Reading<input name="value" type="number" step="any" required value="${displayParameterValue(row.key,row.value)}"></label>` :
       `<div class="scan-panel stack">
         <h3>Scan test results</h3>
         <div class="actions">
@@ -1024,10 +1076,15 @@ function showEntry(key,row) {
     const input = row ? [[data.get('parameter'),data.get('value')]] : choices.map(([id]) => [id,data.get(id)]);
     const added = input.filter(([,value]) => value !== '').map(([id,value]) => ({
       id:row?.id ?? (crypto.randomUUID?.() ?? Date.now()+'-'+id+'-'+Math.random().toString(36).slice(2)),
-      key:id,value:Number(value),date,note
+      key:id,value:id !== 'salt' ? Number(value) : row?.key === 'salt' && Number(value) === salinityDisplay(row.value)
+        ? row.value : parseSalinity(Number(value),salinityUnit()),date,note
     }));
     const error = form.querySelector('#entry-error');
     if (!added.length) { error.textContent = 'Enter at least one reading.'; return; }
+    if (added.some(item => !Number.isFinite(item.value))) {
+      error.textContent = 'Enter a valid salinity in ' + salinityUnit() + (salinityUnit() === 'SG' ? ', such as 1.026.' : ', such as 35.');
+      return;
+    }
     try {
       save({...state,readings:[...state.readings.filter(item => item.id !== row?.id),...added]});
       if (page === 'history' && row) selected = added[0].key;
@@ -1084,7 +1141,7 @@ document.addEventListener('click',event => {
   }
   if (button.dataset.resetTarget) {
     const key = button.dataset.resetTarget;
-    const target = profileTarget(key);
+    const target = displayTarget(key,profileTarget(key));
     const form = button.form;
     form.elements.namedItem(key+'-low').value = target.low ?? '';
     form.elements.namedItem(key+'-high').value = target.high ?? '';
@@ -1158,6 +1215,17 @@ main.addEventListener('input',event => {
 });
 
 main.addEventListener('submit',event => {
+  if (event.target.id === 'salinity-units') {
+    event.preventDefault();
+    const unit = new FormData(event.target).get('salinityUnit');
+    if (!['SG','ppt'].includes(unit)) return;
+    try {
+      save({...state,salinityUnit:unit});
+      render();
+      main.querySelector('#salinity-message').textContent = 'Salinity unit saved.';
+    } catch { main.querySelector('#salinity-message').textContent = 'Could not save the salinity unit.'; }
+    return;
+  }
   if (event.target.id === 'dose-form') {
     event.preventDefault();
     const input = readDose(event.target);
@@ -1235,13 +1303,25 @@ main.addEventListener('submit',event => {
   const settings = {};
   const number = key => data.get(key) === '' ? null : Number(data.get(key));
   for (const [key,label] of PARAMETERS) {
-    const low = number(key+'-low'), high = number(key+'-high');
+    const preset = profileTarget(key);
+    const current = config(key);
+    const targetBound = bound => {
+      const value = number(key+'-'+bound);
+      if (key !== 'salt' || value === null) return value;
+      if (value === displayParameterValue(key,current[bound])) return current[bound];
+      if (value === displayParameterValue(key,preset[bound])) return preset[bound];
+      return parseSalinity(value,salinityUnit());
+    };
+    const low = targetBound('low'), high = targetBound('high');
+    if ([low,high].some(Number.isNaN)) {
+      message.textContent = 'Enter a valid salinity target in ' + salinityUnit() + '.';
+      return;
+    }
     if (low !== null && high !== null && low > high) {
       message.textContent = label + ' minimum must be at or below its maximum.';
       event.target.elements.namedItem(key+'-low').focus();
       return;
     }
-    const preset = profileTarget(key);
     const custom = (low !== null || high !== null) && (low !== preset.low || high !== preset.high);
     settings[key] = {enabled:data.has(key+'-enabled'),low,high,days:number(key+'-days'),custom};
   }
