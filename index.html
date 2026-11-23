@@ -67,6 +67,8 @@ dialog::backdrop{background:#020611bf}
 .reading-head,.reading-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px}
 .reading-head h3{color:var(--ink)}
 .reading-meta{font-size:.84rem;color:var(--muted)}
+.parameter-trend{font-size:.84rem;color:var(--muted)}
+.parameter-trend strong{color:var(--ink)}
 .reading-card .value{font-size:2.2rem;line-height:1.1}
 .reading-card .indicator{font-size:.82rem}
 .reading-card .next-step{margin:0}
@@ -574,8 +576,9 @@ function nextStep(item) {
 function overview() {
   const items = active().map(([key,name,unit]) => {
     const setting = config(key);
-    const reading = records(key)[0];
-    return {key,name,unit,reading,setting:displayTarget(key,setting),...assess(reading,setting)};
+    const readings = records(key);
+    const reading = readings[0];
+    return {key,name,unit,reading,trend:stabilityTrend(key,readings),setting:displayTarget(key,setting),...assess(reading,setting)};
   });
   const order = ['red','yellow','green','gray'];
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
@@ -591,6 +594,7 @@ function overview() {
       <div class="reading-head"><h3>${item.name}</h3><span class="indicator"><span class="dot ${item.color}" aria-hidden="true"></span>${item.label}</span></div>
       <div class="value">${item.reading ? format(displayParameterValue(item.key,item.reading.value)) : '—'} <span class="unit">${item.unit}</span></div>
       <div class="reading-meta"><span>${range(item.setting,item.unit)}</span>${item.reading ? `<time datetime="${item.reading.date}">${dateText(item.reading.date)}</time>` : ''}</div>
+      ${item.trend ? trendSummary(item.trend,item.unit) : ''}
       ${nextStep(item) ? `<p class="next-step">${nextStep(item)}</p>` : ''}
       <button data-history="${item.key}">View history</button></article>`).join('') || '<p>Enable a parameter in Settings under Targets.</p>'}</div>
   </section>`;
@@ -828,13 +832,35 @@ function updateDosePreview() {
   main.querySelector('#dose-suggestion').innerHTML = `<h3>Suggested amount</h3><div class="stack">${doseSuggestion(dose,latest,target,unit)}</div>`;
 }
 
+function stabilityTrend(key,readings) {
+  const latest = new Map();
+  for (const row of readings) {
+    if (!latest.has(row.date)) latest.set(row.date,displayParameterValue(key,row.value));
+    if (latest.size === 5) break;
+  }
+  if (latest.size < 3) return null;
+  const values = [...latest.values()].reverse();
+  const rising = values.some((value,index) => index > 0 && value > values[index-1]);
+  const falling = values.some((value,index) => index > 0 && value < values[index-1]);
+  const label = rising && falling ? 'Fluctuating' : rising ? 'Rising' : falling ? 'Falling' : 'Steady';
+  return {label,count:values.length,low:Math.min(...values),high:Math.max(...values)};
+}
+
+function trendSummary(trend,unit,includeRange = false) {
+  const suffix = unit ? ' ' + unit : '';
+  const spread = trend.low === trend.high ? format(trend.low) : format(trend.low) + '–' + format(trend.high);
+  return `<p class="parameter-trend"><strong>${trend.label}</strong> over the last ${trend.count} tests${includeRange ? ` · Observed ${spread}${suffix}` : ''}</p>`;
+}
+
 function historyView() {
   const [key,name,unit] = parameter(selected);
   const readings = records(key);
+  const trend = stabilityTrend(key,readings);
   return `<section><div class="section-head"><h1>History</h1><button class="primary" data-add="${key}">Add water test</button></div>
     <div class="panel"><p class="muted">${esc(state.name)}</p><label>Parameter<select id="history-filter">${PARAMETERS.map(([id,label]) => `<option value="${id}" ${id===key?'selected':''}>${label}</option>`).join('')}</select></label>
     ${readings.length ? `<canvas class="chart" id="chart" role="img" aria-label="${name} trend. Values are listed below."></canvas>
-    <p class="muted">${range(displayTarget(key,config(key)),unit)} · Latest ${Math.min(readings.length,60)} plotted</p>` : '<p class="muted">No readings for this parameter yet.</p>'}</div></section>
+    <p class="muted">${range(displayTarget(key,config(key)),unit)} · Latest ${Math.min(readings.length,60)} plotted</p>` : '<p class="muted">No readings for this parameter yet.</p>'}
+    <div class="stack"><h3>Stability trend</h3>${trend ? trendSummary(trend,unit,true) : '<p class="muted">Log at least three tests at different times to see a trend.</p>'}</div></div></section>
     <section class="panel history"><h2>${name} readings</h2>${readings.map(row => `<article><div><strong>${format(displayParameterValue(key,row.value))} ${unit}</strong><div class="muted">${dateText(row.date)}</div>
     ${row.note ? `<p class="note">${esc(row.note)}</p>` : ''}</div><div class="actions"><button data-edit="${esc(row.id)}">Edit</button><button data-delete="${esc(row.id)}">Delete</button></div></article>`).join('') || '<p class="muted">Once saved, tests appear here.</p>'}</section>`;
 }
