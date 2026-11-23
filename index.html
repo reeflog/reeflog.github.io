@@ -146,10 +146,69 @@ input[data-scanned]{border-color:#48d8ee}
 .task-complete .task-title{color:var(--muted);text-decoration:line-through}
 #task-reminder-date[hidden],#task-message:empty{display:none}
 @media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
+.nav-icon{display:none}
+.nav-drop{width:10px;height:13px;border:1.5px solid currentColor;border-radius:70% 45% 70% 70%;transform:rotate(35deg)}
+.bar nav>button,.settings-menu summary{min-height:44px}
+.dashboard{display:grid;gap:20px}
+.dashboard>section{margin:0}
+.dashboard .tank-overview{overflow:hidden;isolation:isolate;min-height:144px;background:linear-gradient(118deg,#122233,#173d47)}
+.dashboard .tank-overview::before{content:"";pointer-events:none;position:absolute;z-index:-1;inset:0 0 0 30%;
+  background:repeating-radial-gradient(ellipse at 84% 105%,transparent 0 16px,#66dbeb1c 17px 18px,transparent 19px 32px);
+  mask-image:linear-gradient(105deg,transparent,#000 52%)}
+.dashboard .tank-overview .primary{white-space:nowrap}
+.primary[data-add]{min-height:44px}
+.dashboard .section-head{margin-bottom:10px}
+.summary>button{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:3px 8px;min-width:0;text-align:left;background:#121c2b;padding:10px 12px}
+.summary>button span:last-child{grid-column:1/-1;color:var(--muted);font-size:.75rem}
+.summary>button[aria-pressed="true"]{background:#153744;border-color:#55c7db}
+.parameter-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.parameter-row{min-width:0;background:#121c2b;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.parameter-open{display:grid;grid-template-columns:minmax(0,1fr) auto 12px;align-items:center;gap:10px;
+  width:100%;min-height:68px;text-align:left;background:transparent;border:0;border-radius:0;padding:9px 12px}
+.parameter-open:hover{background:#192b3e;filter:none}
+.parameter-open:focus-visible{outline-offset:-3px}
+.parameter-label,.parameter-reading{display:grid;gap:2px;min-width:0}
+.parameter-label small,.parameter-reading small{font-size:.72rem;color:var(--muted);font-weight:500}
+.parameter-reading{text-align:right;font-variant-numeric:tabular-nums}
+.parameter-reading .indicator{justify-content:flex-end}
+.parameter-reading .dot{width:8px;height:8px}
+.parameter-reading strong{font-size:1.2rem;line-height:1.15}
+.parameter-reading .unit{font-size:.75rem}
+.parameter-chevron{width:6px;height:6px;border:solid var(--muted);border-width:0 2px 2px 0;transform:rotate(-45deg)}
+.parameter-advice{padding:0 12px 8px;font-size:.78rem;color:var(--muted)}
+.parameter-advice summary{width:fit-content;cursor:pointer;color:#a6e9f3;padding:4px 0}
+.parameter-advice p{margin-top:4px}
+.task-preview .section-head{margin-bottom:7px}
+.task-preview .section-head button{font-size:.82rem;min-height:40px}
+.task-preview .outstanding-tasks{padding-inline-start:1.1rem;font-size:.9rem}
+#dose-message:empty{display:none}
+.page-heading{display:grid;gap:5px}
+.page-heading h1{font-size:clamp(1.9rem,5vw,2.8rem)}
+.task-compose>summary{cursor:pointer;font-weight:700}
+.task-compose[open]>summary{margin-bottom:12px}
+@media(max-width:600px){
+  .bar{min-height:56px}
+  main{padding:16px 12px calc(84px + env(safe-area-inset-bottom))}
+  .bar nav{gap:2px;padding-inline:4px;box-shadow:0 -6px 20px #06091380}
+  .bar nav>button,.settings-menu summary{display:grid;justify-items:center;align-content:center;gap:2px;min-height:48px;padding:3px 2px;font-size:.72rem;line-height:1.15}
+  .nav-icon{display:block;font-size:1.15rem;line-height:1}
+  .settings-popover button{min-height:44px}
+  .dashboard{gap:15px}
+  .dashboard .tank-overview{min-height:0;padding:16px;gap:12px}
+  .dashboard .tank-overview h1{font-size:1.9rem}
+  .dashboard .tank-overview .tank-meta{font-size:.8rem}
+  .dashboard .tank-overview .primary{font-size:.83rem;padding-inline:10px}
+  .parameter-list{grid-template-columns:1fr;gap:6px}
+  .summary>button{padding:8px}
+  .summary>button span:last-child{font-size:.7rem;width:auto}
+  .panel{padding:14px}
+  input,select,textarea{font-size:16px}
+  dialog{padding:16px}
+}
 </style>
 </head>
 <body>
-<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="dosing">Dosing</button><button data-view="tasks">Tasks</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="tanks">Tanks</button><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
+<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview"><span class="nav-icon" aria-hidden="true">⌂</span>Overview</button><button data-view="dosing"><span class="nav-icon nav-drop" aria-hidden="true"></span>Dosing</button><button data-view="tasks"><span class="nav-icon" aria-hidden="true">✓</span>Tasks</button><button data-view="history"><span class="nav-icon" aria-hidden="true">◷</span>History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="tanks">Tanks</button><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
 <main id="main"></main>
 <dialog id="entry"><form id="test-form" class="stack"></form></dialog>
 <dialog id="rename-tank" aria-labelledby="rename-title">
@@ -245,6 +304,7 @@ try {
 }
 let page = 'overview';
 let selected = 'alk';
+let readingFilter = '';
 
 function validateFleet(data) {
   if (data?.version === 1) return {version:2,active:'first',tanks:[{id:'first',log:validate(data)}]};
@@ -440,6 +500,7 @@ function saveFleet(next) {
 }
 
 function showFleet(next) {
+  if (next.active !== fleet.active) readingFilter = '';
   fleet = next;
   state = fleet.tanks.find(tank => tank.id === fleet.active).log;
 }
@@ -624,25 +685,35 @@ function overview() {
   const order = ['red','yellow','green','gray'];
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
   const count = color => items.filter(item => item.color === color).length;
-  return `<section class="hero tank-overview"><div class="tank-details"><div class="tank-heading"><h1>${esc(state.name)}</h1>
+  const visible = readingFilter ? items.filter(item => item.color === readingFilter) : items;
+  return `<div class="dashboard"><section class="hero tank-overview"><div class="tank-details"><div class="tank-heading"><h1>${esc(state.name)}</h1>
     ${fleet.tanks.length > 1 ? `<span class="tank-heading-arrow" aria-hidden="true"></span><select id="overview-tank" aria-label="Switch tank">
       ${fleet.tanks.map(tank => `<option value="${esc(tank.id)}" ${tank.id === fleet.active ? 'selected' : ''}>${esc(tank.log.name)}</option>`).join('')}
       </select>` : ''}</div><p class="tank-meta">${tankType}${volume ? ` · ${doseNumber(volume.amount)} ${volume.unit}` : ''}${age ? ` · Tank age ${age.toLowerCase()}` : ''}</p></div>
     <button class="primary" data-add>Add water test</button></section>
   ${outstandingTasks()}
-  <section aria-label="Reading summary" class="summary">
+  <section aria-label="Reading summary and filters" class="summary">
     ${[['green','Healthy'],['yellow','Needs attention'],['red','Fix immediately']].map(([color,label]) =>
-      `<div><span class="dot ${color}" aria-hidden="true"></span><strong>${count(color)}</strong><span>${label}</span></div>`).join('')}
+      `<button type="button" data-reading-filter="${color}" aria-pressed="${readingFilter === color}"><span class="dot ${color}" aria-hidden="true"></span><strong>${count(color)}</strong><span>${label}</span></button>`).join('')}
   </section>
-  <section><div class="section-head"><h2>Latest readings</h2><button data-view="targets">View targets</button></div>
-    <div class="grid reading-grid">${items.map(item => `<article class="card reading-card" data-status="${item.color}">
-      <div class="reading-head"><h3>${item.name}</h3><span class="indicator"><span class="dot ${item.color}" aria-hidden="true"></span>${item.label}</span></div>
-      <div class="value">${item.reading ? format(displayParameterValue(item.key,item.reading.value)) : '—'} <span class="unit">${item.unit}</span></div>
-      <div class="reading-meta"><span>${range(item.setting,item.unit)}</span>${item.reading ? `<time datetime="${item.reading.date}">${dateText(item.reading.date)}</time>` : ''}</div>
-      ${item.trend ? trendSummary(item.trend,item.unit) : ''}
-      ${nextStep(item) ? `<p class="next-step">${nextStep(item)}</p>` : ''}
-      <button data-history="${item.key}">View history</button></article>`).join('') || '<p>Enable a parameter in Settings under Targets.</p>'}</div>
-  </section>`;
+  <section><div class="section-head"><h2>Latest readings</h2><div class="actions">${readingFilter ? '<button type="button" data-reading-filter="">Show all</button>' : ''}<button data-view="targets">Targets</button></div></div>
+    <div class="parameter-list">${visible.map(parameterRow).join('') ||
+      (readingFilter ? '<p class="muted">No readings with this status.</p>' : '<p class="muted">Enable a parameter under Targets.</p>')}</div>
+  </section></div>`;
+}
+
+function parameterRow(item) {
+  const advice = nextStep(item);
+  return `<article class="parameter-row">
+    <button type="button" class="parameter-open" data-history="${item.key}" aria-label="View ${item.name} history">
+      <span class="parameter-label"><strong>${item.name}</strong><small>${range(item.setting,item.unit)}</small></span>
+      <span class="parameter-reading"><strong>${item.reading ? format(displayParameterValue(item.key,item.reading.value)) : '—'} <span class="unit">${item.unit}</span></strong>
+        <small class="indicator"><span class="dot ${item.color}" aria-hidden="true"></span>${item.label}</small></span>
+      <span class="parameter-chevron" aria-hidden="true"></span>
+    </button>
+    ${item.reading ? `<div class="parameter-advice"><small><time datetime="${item.reading.date}">${dateText(item.reading.date)}</time></small>${item.trend ? trendSummary(item.trend,item.unit) : ''}</div>` : ''}
+    ${advice ? `<details class="parameter-advice"><summary>What to check</summary><p>${advice}</p></details>` : ''}
+  </article>`;
 }
 
 function taskIsDue(task,today = localDate(Date.now()).slice(0,10)) {
@@ -665,12 +736,12 @@ function outstandingTasks() {
   if (!open.length) return '';
   const today = localDate(Date.now()).slice(0,10);
   const due = open.filter(task => taskIsDue(task,today)).length;
-  return `<section class="panel" aria-labelledby="outstanding-tasks-heading">
+  return `<section class="panel task-preview" aria-labelledby="outstanding-tasks-heading">
     <div class="section-head"><div><h2 id="outstanding-tasks-heading">Outstanding tasks</h2>
       ${due ? `<p class="task-due">${due} ${due === 1 ? 'task' : 'tasks'} due</p>` : ''}</div>
-      <button data-view="tasks">Open Tasks</button>
+      <button data-view="tasks">View all${open.length > 3 ? ' (' + open.length + ')' : ''}</button>
     </div>
-    <ul class="outstanding-tasks">${open.map(task => `<li>${esc(task.text)}${taskReminder(task,today)}</li>`).join('')}</ul>
+    <ul class="outstanding-tasks">${open.slice(0,3).map(task => `<li>${esc(task.text)}${taskReminder(task,today)}</li>`).join('')}</ul>
   </section>`;
 }
 
@@ -692,15 +763,16 @@ function taskList() {
 
 function taskView() {
   return `<section class="stack">
-    <div><h1>Tasks</h1><p class="muted">${esc(state.name)}</p></div>
-    <form id="task-form" class="panel stack">
+    <div class="page-heading"><h1>Tasks</h1><p class="muted">${esc(state.name)}</p></div>
+    <details class="panel task-compose" ${state.tasks.length ? '' : 'open'}><summary>Add a task</summary>
+    <form id="task-form" class="stack">
       <label>Task type<select name="kind"><option value="general">General</option><option value="water">Water change</option></select></label>
       <label>Task<textarea name="text" rows="2" required maxlength="240" placeholder="e.g. Test alkalinity"></textarea></label>
       <label class="check"><input type="checkbox" name="remind" aria-controls="task-reminder-date"> Set a reminder</label>
       <label id="task-reminder-date" hidden>Reminder date<input type="date" name="reminder" disabled></label>
       <p class="muted">Reminders appear in REEFLOG on the selected date.</p>
       <div><button class="primary">Add task</button></div>
-    </form>
+    </form></details>
     <p id="task-message" role="status"></p>
     <div class="stack" id="task-list">${taskList()}</div>
   </section>`;
@@ -711,7 +783,7 @@ function dosing() {
   const last = doses[0];
   const waterVolume = state.waterVolume;
   const volumeUnit = waterVolume?.unit ?? 'L';
-  return `<section class="stack"><div><h1>Dosing</h1><p class="muted">${esc(state.name)} · Estimate a dose, then log the amount you added.</p></div>
+  return `<section class="stack"><div class="page-heading"><h1>Dosing</h1><p class="muted">${esc(state.name)}</p></div>
     <div class="dose-layout">
       <form id="dose-form" class="panel stack" data-tank="${esc(fleet.active)}" data-volume-unit="${volumeUnit}">
         <h2>Dose details</h2>
@@ -732,13 +804,14 @@ function dosing() {
           <label>Label water volume (${volumeUnit})<input name="labelVolume" type="number" inputmode="decimal" step="any" min="0" required></label>
           <label><span>Label rise (<span id="dose-rise-unit"></span>)</span><input name="labelRise" type="number" inputmode="decimal" step="any" min="0" required></label>
         </div>
-        <div><button class="primary" ${waterVolume ? '' : 'disabled'}>Log dose added</button></div><p id="dose-message" role="status"></p>
       </form>
       <section class="panel stack" aria-labelledby="dose-projection-heading">
         <h2 id="dose-projection-heading">Projection map</h2>
         <div id="dose-preview" aria-live="polite" class="stack"></div>
         <div id="dose-suggestion" class="stack" aria-live="polite"></div>
         <p class="muted">This estimate applies to the entered dose only. Follow the product label and retest to measure the actual change.</p>
+        <div><button type="submit" form="dose-form" class="primary" ${waterVolume ? '' : 'disabled'}>Log dose added</button></div>
+        <p id="dose-message" role="status"></p>
       </section>
     </div>
     <section class="panel history"><h2>Dose history</h2>${doses.map(dose => {
@@ -1401,6 +1474,13 @@ document.addEventListener('click',event => {
   const menu = document.querySelector('#settings-menu');
   if (menu?.open && !menu.contains(event.target)) menu.open = false;
   if (!button) return;
+  if (Object.hasOwn(button.dataset,'readingFilter')) {
+    const color = button.dataset.readingFilter;
+    readingFilter = readingFilter === color ? '' : color;
+    render();
+    main.querySelector('[data-reading-filter="' + (color || 'green') + '"]')?.focus();
+    return;
+  }
   if (button.dataset.view) {
     page=button.dataset.view;
     if (menu?.contains(button)) menu.querySelector('summary').focus();
@@ -1529,7 +1609,7 @@ main.addEventListener('submit',event => {
       save({...state,tasks:[...state.tasks,{id,text:text.slice(0,240),reminder,done:false,kind}]});
       render();
       main.querySelector('#task-message').textContent = 'Task added.';
-      main.querySelector('#task-form textarea')?.focus();
+      main.querySelector('.task-compose summary')?.focus();
     } catch { message.textContent = 'Could not save the task.'; }
     return;
   }
