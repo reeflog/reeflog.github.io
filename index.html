@@ -42,8 +42,11 @@ button,input,select,textarea{background:#141f30;color:var(--ink);border-color:#3
 .primary{background:#48d8ee;color:#06222c}
 .hero{position:relative;background:radial-gradient(ellipse at 93% 105%,#174e63 0%,transparent 65%),linear-gradient(120deg,#172738,#101727);border-color:#2a455a}
 .hero p{color:#b0c7da}
-.hero-actions{align-items:end}
-.hero-actions label{width:min(210px,100%)}
+.tank-heading{display:inline-flex;align-items:center;gap:.9rem;position:relative;max-width:100%;border-radius:6px}
+.tank-heading h1{overflow-wrap:anywhere}
+.tank-heading select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.tank-heading:focus-within{outline:2px solid var(--teal);outline-offset:5px}
+.tank-heading-arrow{width:.65rem;height:.65rem;flex:none;border:solid var(--teal);border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg)}
 .card,.panel,dialog{background:#121c2b;border-color:var(--line)}
 .card h3{color:#b9c9db}
 .pill{background:#273548;color:#d5e4f0}
@@ -585,10 +588,11 @@ function overview() {
   const order = ['red','yellow','green','gray'];
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
   const count = color => items.filter(item => item.color === color).length;
-  return `<section class="hero"><div><h1>${esc(state.name)}</h1><p>${CORAL_PROFILES[profileKey(state)].label}${profileKey(state) === 'fowlr' ? '' : ' reef'} · Water parameters</p></div>
-    <div class="actions hero-actions">${fleet.tanks.length > 1 ? `<label>Switch tank<select id="overview-tank">
+  return `<section class="hero"><div><div class="tank-heading"><h1>${esc(state.name)}</h1>
+    ${fleet.tanks.length > 1 ? `<span class="tank-heading-arrow" aria-hidden="true"></span><select id="overview-tank" aria-label="Switch tank">
       ${fleet.tanks.map(tank => `<option value="${esc(tank.id)}" ${tank.id === fleet.active ? 'selected' : ''}>${esc(tank.log.name)}</option>`).join('')}
-      </select></label>` : ''}<button class="primary" data-add>Add water test</button></div></section>
+      </select>` : ''}</div><p>${CORAL_PROFILES[profileKey(state)].label}${profileKey(state) === 'fowlr' ? '' : ' reef'} · Water parameters</p></div>
+    <button class="primary" data-add>Add water test</button></section>
   ${outstandingTasks()}
   <section aria-label="Reading summary" class="summary">
     ${[['green','Healthy'],['yellow','Needs attention'],['red','Fix immediately']].map(([color,label]) =>
