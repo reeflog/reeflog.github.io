@@ -1116,13 +1116,7 @@ function urgentText({urgentLow,urgentHigh}) {
 
 function targets() {
   return `<section class="stack"><div class="page-heading"><h1>Targets</h1><p class="muted">${esc(state.name)} · ${CORAL_PROFILES[profileKey(state)].label} profile</p></div>
-    <form id="salinity-units" class="panel stack"><div class="workspace-toolbar">
-      <label>Salinity units<select name="salinityUnit">
-        <option value="SG" ${salinityUnit()==='SG'?'selected':''}>Specific gravity (SG)</option>
-        <option value="ppt" ${salinityUnit()==='ppt'?'selected':''}>Parts per thousand (ppt)</option>
-      </select></label>
-      <div><button>Save unit</button></div></div><p role="status" id="salinity-message"></p>
-    </form><form id="targets-form" class="panel stack">
+    <form id="salinity-units" hidden></form><form id="targets-form" class="panel stack">
     <label>Tank name<input name="name" required maxlength="60" value="${esc(state.name)}"></label>
     <p class="muted">Change the profile in Tanks. Custom ranges stay with this tank.</p>
     <div class="target-grid">
@@ -1131,6 +1125,10 @@ function targets() {
       const setting = displayTarget(key,config(key));
       const {low,high,days,enabled,custom} = setting;
       return `<div class="settings-row"><label class="check"><input name="${key}-enabled" type="checkbox" ${enabled?'checked':''}> Show ${name} ${unit ? '('+unit+')' : ''}</label>
+      ${key === 'salt' ? `<div class="workspace-toolbar"><label>Units<select name="salinityUnit" form="salinity-units">
+        <option value="SG" ${salinityUnit()==='SG'?'selected':''}>Specific gravity (SG)</option>
+        <option value="ppt" ${salinityUnit()==='ppt'?'selected':''}>Parts per thousand (ppt)</option>
+      </select></label><button type="submit" form="salinity-units">Save unit</button></div><p role="status" id="salinity-message"></p>` : ''}
       <div class="fields"><label>Minimum<input name="${key}-low" type="number" step="any" value="${low ?? ''}"></label>
       <label>Maximum<input name="${key}-high" type="number" step="any" value="${high ?? ''}"></label>
       <label>Test interval (days)<input name="${key}-days" type="number" min="1" max="3650" step="1" value="${days ?? ''}"></label></div><p class="muted">Fix immediately · ${urgentText(setting)}</p><div class="actions target-type"><span class="muted" data-target-source="${key}">${custom ? 'Custom range' : 'Profile range'}</span><button type="button" data-reset-target="${key}">Use profile range</button></div></div>`;
