@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#101827">
+<meta name="theme-color" content="#102721">
 <title>Reef Log</title>
 <style>
 :root{font:16px/1.5 system-ui,sans-serif;color:#132c32;background:#eef5f3;--ink:#132c32;--muted:#506970;--line:#d5e5e1;--teal:#087667}
@@ -146,9 +146,31 @@ input[data-scanned]{border-color:#48d8ee}
 .task-complete .task-title{color:var(--muted);text-decoration:line-through}
 #task-reminder-date[hidden],#task-message:empty{display:none}
 @media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
+/* Underwater backdrop and translucent foreground surfaces. */
+:root{background:#0d211d;--ink:#fff4e6;--muted:#c4cec1;--line:#3b5d50;--teal:#dceba0;color:var(--ink)}
+#reef-scene{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;background:#102721}
+header,main{position:relative}
+header,.settings-popover{background:#102721f5}
+.bar nav{color:var(--muted)}
+.brand span,.brand:hover,.source-links a,.panel a{color:var(--teal)}
+nav button,.settings-menu summary{color:var(--muted)}
+nav button[aria-current],.settings-menu[open] summary,.settings-menu:has(button[aria-current]) summary,
+.profile-pills button[aria-pressed=true]{background:#334535;color:#eef4c8;border-color:#829766}
+button,input,select,textarea{background:#203931;border-color:#527267}
+.primary{background:var(--teal);color:#19281b}
+.hero{background:linear-gradient(112deg,#0d2621f2,#1f4432bb 62%,#274b338c);border-color:#69816a;box-shadow:0 12px 36px #07191355}
+.hero p{color:#d6dfce}
+.card,.panel,.summary>div,.scan-panel{background:#122922ef}
+dialog{background:#132c24}
+.tank-heading-arrow{background:#25483a;border-color:#557861}
+.tank-heading:hover .tank-heading-arrow{background:#37573e}
+.reading-card:not([data-status=red],[data-status=yellow],[data-status=green]){border-left-color:#668775}
+.footer{background:#102721ef;padding:8px 12px;border-radius:8px;width:fit-content}
+@media(max-width:600px){.bar nav{background:#102721fa}}
 </style>
 </head>
 <body>
+<canvas id="reef-scene" aria-hidden="true"></canvas>
 <header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="dosing">Dosing</button><button data-view="tasks">Tasks</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="tanks">Tanks</button><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
 <main id="main"></main>
 <dialog id="entry"><form id="test-form" class="stack"></form></dialog>
@@ -2055,6 +2077,221 @@ if (location.href.startsWith(REEF_URL)) {
     refreshAccount();
   });
 }
+</script>
+<script>
+(() => {
+  const canvas = document.getElementById('reef-scene');
+  const ctx = canvas.getContext('2d', {alpha:false});
+  if (!ctx) return;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const random = seed => () => {
+    seed = (Math.imul(1664525,seed)+1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const palettes = [
+    ['#231d28','#964d54','#de9480'],
+    ['#1b302b','#64764b','#afc273'],
+    ['#201d2e','#7f537f','#bc83a9'],
+    ['#232521','#846345','#d4ad73']
+  ];
+  const reef = [
+    {x:.04,y:.82,size:.48,color:2,seed:27,fan:true},
+    {x:.94,y:.76,size:.42,color:1,seed:18,fan:true},
+    {x:.20,y:1.02,size:.42,color:3,seed:11,fan:false},
+    {x:.78,y:1.02,size:.36,color:2,seed:84,fan:false},
+    {x:.02,y:1.07,size:.63,color:0,seed:47,fan:false},
+    {x:.98,y:1.09,size:.60,color:3,seed:63,fan:false},
+    {x:.12,y:1.04,size:.29,color:1,seed:93,fan:true},
+    {x:.88,y:1.03,size:.30,color:0,seed:121,fan:false},
+    {x:.54,y:1.10,size:.24,color:1,seed:195,fan:false}
+  ];
+  function makeBranches({seed,fan}) {
+    const rand = random(seed);
+    const branches = [];
+    function grow(x,y,angle,length,depth) {
+      const endX = x+Math.sin(angle)*length;
+      const endY = y-Math.cos(angle)*length;
+      const curve = (rand()-.5)*length*.42;
+      branches.push({x,y,endX,endY,cx:(x+endX)/2+curve,cy:(y+endY)/2,
+        thickness:(fan ? .010 : .038)*(.58**depth)*(rand()*.45+.8),tip:depth>=4});
+      if (depth >= 4) return;
+      const spread = fan ? .77 : .54;
+      for (const side of [-1,1]) {
+        grow(endX,endY,angle*.6+side*(spread+rand()*.23),length*(.62+rand()*.13),depth+1);
+      }
+      if (depth === 1 || (depth === 2 && rand() > .5)) {
+        grow(x+(endX-x)*.66,y+(endY-y)*.66,angle*.48+(rand()-.5)*.30,length*.72,depth+1);
+      }
+    }
+    for (let i=0;i<(fan ? 5 : 3);i++) {
+      const offset = i-(fan ? 2 : 1);
+      grow(offset*.015,0,offset*(fan ? .34 : .46)+(rand()-.5)*.24,.36+rand()*.14,0);
+    }
+    return branches;
+  }
+  const colonies = reef.map(colony => ({...colony,branches:makeBranches(colony)}));
+  const rand = random(350);
+  const specks = Array.from({length:105},() => [rand(),rand(),rand(),rand()]);
+  const rockShapes = Array.from({length:30},(_,i) => {
+    const side = i%2;
+    return {x:side ? .68+rand()*.42 : rand()*.38-.09, y:.86+rand()*.18,
+      width:.025+rand()*.10,height:.018+rand()*.095,shade:rand(),
+      points:Array.from({length:10},() => .75+rand()*.35)};
+  }).sort((a,b) => a.y-b.y);
+  let width = 0, height = 0, scale = 1;
+  let depth = 0, target = 0, bend = 0, frame = 0;
+
+  function drawWater() {
+    const surface = ctx.createLinearGradient(0,0,0,height);
+    surface.addColorStop(0,'#23614d');
+    surface.addColorStop(.40,'#184437');
+    surface.addColorStop(.78,'#102f2b');
+    surface.addColorStop(1,'#091918');
+    ctx.fillStyle = surface;
+    ctx.fillRect(0,0,width,height);
+    const lightX = width*(.46+.09*Math.sin(depth*.9));
+    const glow = ctx.createRadialGradient(lightX,-height*.12,0,lightX,0,height*.85);
+    glow.addColorStop(0,'#b8df9d67');
+    glow.addColorStop(.38,'#7ac39137');
+    glow.addColorStop(1,'#6abd8900');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0,0,width,height);
+    const rays = ctx.createLinearGradient(0,0,0,height*.90);
+    rays.addColorStop(0,'#d6efab25');
+    rays.addColorStop(.62,'#83cba414');
+    rays.addColorStop(1,'#a7dab100');
+    ctx.save();
+    ctx.filter = 'blur(8px)';
+    ctx.fillStyle = rays;
+    ctx.beginPath();
+    for (let i=0;i<9;i++) {
+      const top = lightX+(i-4)*width*.051+Math.sin(i*3+depth)*14;
+      const bottom = top+(i-4)*width*.13+width*.20;
+      ctx.moveTo(top-width*.002,0);
+      ctx.lineTo(top+width*.014,0);
+      ctx.lineTo(bottom+width*.074,height*.91);
+      ctx.lineTo(bottom-width*.035,height*.91);
+      ctx.closePath();
+    }
+    ctx.fill();
+    ctx.restore();
+    for (const [x,y,size,opacity] of specks) {
+      const drift = (y+.09)%1;
+      const py = ((drift-depth*(.015+size*.03))%1+1)%1*height;
+      const px = x*width+Math.sin(y*15+depth)*10;
+      ctx.fillStyle = `rgba(205,230,188,${.10+opacity*.25})`;
+      ctx.beginPath();
+      ctx.arc(px,py,.6+size*1.35,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function drawRock(rock) {
+    const x = rock.x*width, y = rock.y*height;
+    const rx = Math.max(width*.62,360)*rock.width, ry = height*rock.height;
+    const lighting = ctx.createLinearGradient(x,y-ry,x,y+ry);
+    lighting.addColorStop(0,rock.shade > .5 ? '#48533e' : '#314b3c');
+    lighting.addColorStop(.5,rock.shade > .5 ? '#263b31' : '#1e3830');
+    lighting.addColorStop(1,'#0a211d');
+    ctx.fillStyle = lighting;
+    ctx.beginPath();
+    rock.points.forEach((radius,index) => {
+      const angle = Math.PI*2*index/rock.points.length;
+      const px = x+Math.cos(angle)*rx*radius;
+      const py = y+Math.sin(angle)*ry*radius;
+      if (index === 0) ctx.moveTo(px,py);
+      else ctx.lineTo(px,py);
+    });
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawCoral(colony,opacity = 1) {
+    const {x,y,size,color,seed,fan,branches} = colony;
+    const length = size*Math.min(height,width*1.42);
+    const current = Math.sin(depth*1.65+seed)*.028+bend*(fan ? .44 : .19);
+    const offset = (px,py) => px+current*py*py;
+    ctx.save();
+    ctx.translate(x*width,y*height);
+    ctx.scale(length,length);
+    ctx.globalAlpha = opacity;
+    ctx.lineCap = 'round';
+    const [shadow,middle,tip] = palettes[color];
+    const light = ctx.createLinearGradient(0,0,0,-1.35);
+    light.addColorStop(0,shadow);
+    light.addColorStop(.52,middle);
+    light.addColorStop(1,tip);
+    for (const branch of branches) {
+      const {x,y,endX,endY,cx,cy,thickness} = branch;
+      ctx.beginPath();
+      ctx.moveTo(offset(x,y),y);
+      ctx.quadraticCurveTo(offset(cx,cy),cy,offset(endX,endY),endY);
+      ctx.strokeStyle = shadow;
+      ctx.lineWidth = thickness*1.4;
+      ctx.stroke();
+      ctx.strokeStyle = light;
+      ctx.lineWidth = thickness;
+      ctx.stroke();
+      if (!branch.tip) continue;
+      ctx.fillStyle = tip;
+      ctx.globalAlpha = opacity*(fan ? .45 : .76);
+      const tipX = offset(endX,endY);
+      const polyp = thickness*(fan ? .75 : 1.4);
+      ctx.beginPath();
+      ctx.ellipse(tipX,endY,polyp,polyp*1.3,.3,0,Math.PI*2);
+      ctx.fill();
+      if (!fan) {
+        ctx.fillStyle = middle;
+        ctx.beginPath();
+        ctx.arc(tipX,endY-polyp*.15,polyp*.56,0,Math.PI*2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = opacity;
+    }
+    ctx.restore();
+  }
+
+  function drawScene() {
+    ctx.setTransform(scale,0,0,scale,0,0);
+    drawWater();
+    for (const colony of colonies.slice(0,2)) drawCoral(colony,.55);
+    for (const rock of rockShapes) drawRock(rock);
+    for (const colony of colonies.slice(2)) drawCoral(colony);
+  }
+
+  function tick() {
+    const distance = target-depth;
+    depth += distance*.10;
+    bend += (Math.max(-.26,Math.min(.26,distance*.18))-bend)*.13;
+    drawScene();
+    frame = Math.abs(distance) > .002 || Math.abs(bend) > .001 ? requestAnimationFrame(tick) : 0;
+  }
+
+  function resize() {
+    width = canvas.clientWidth;
+    height = canvas.clientHeight;
+    if (!width || !height) return;
+    scale = Math.min(devicePixelRatio || 1,1.5);
+    canvas.width = Math.round(width*scale);
+    canvas.height = Math.round(height*scale);
+    depth = target = reduced.matches ? 0 : scrollY/Math.max(1,height);
+    bend = 0;
+    drawScene();
+  }
+
+  addEventListener('resize',resize);
+  addEventListener('scroll',() => {
+    if (reduced.matches) return;
+    target = scrollY/Math.max(1,height);
+    if (!frame) frame = requestAnimationFrame(tick);
+  },{passive:true});
+  reduced.addEventListener('change',() => {
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    resize();
+  });
+  resize();
+})();
 </script>
 </body>
 </html>
