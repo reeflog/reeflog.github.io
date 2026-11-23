@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#101512">
+<meta name="theme-color" content="#352d49">
 <title>Reef Log</title>
 <style>
 :root{font:16px/1.5 system-ui,sans-serif;color:#132c32;background:#eef5f3;--ink:#132c32;--muted:#506970;--line:#d5e5e1;--teal:#087667}
@@ -146,29 +146,39 @@ input[data-scanned]{border-color:#48d8ee}
 .task-complete .task-title{color:var(--muted);text-decoration:line-through}
 #task-reminder-date[hidden],#task-message:empty{display:none}
 @media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
-/* Black and green reef dashboard. */
-:root{background:#0b0e0d;--ink:#edf5ef;--muted:#afbeb5;--line:#2b3730;--teal:#31e878;color:var(--ink)}
-header,.settings-popover{background:#101512}
-.brand{font-family:ui-monospace,Consolas,monospace;letter-spacing:.12em;color:var(--ink)}
+/* Plum dashboard framed by a pink-violet gradient. */
+:root{background:#9962c8;--ink:#faf6ff;--muted:#d0c4df;--line:#554866;--teal:#d2b4ff;color:var(--ink)}
+body{min-height:100vh;background:linear-gradient(125deg,#f75caa 0%,#cf6fc5 43%,#8465cf 100%) fixed;padding:clamp(12px,3vw,36px) 12px}
+header,main{max-width:1120px;margin-inline:auto;background:#29243a}
+header{border:0;border-radius:22px 22px 0 0}
+.bar{max-width:none;border-bottom:1px solid #473d58;border-radius:22px 22px 0 0;background:#352d49}
+main{border-radius:0 0 22px 22px;min-height:calc(100vh - 120px);box-shadow:0 18px 38px #4b225150}
+.brand{color:var(--ink)}
 .brand span,.brand:hover,.source-links a,.panel a{color:var(--teal)}
 nav button,.settings-menu summary{color:var(--muted)}
 nav button[aria-current],.settings-menu[open] summary,.settings-menu:has(button[aria-current]) summary,
-.profile-pills button[aria-pressed=true]{background:#14281d;color:#91ffb6;border-color:#365b45}
-button,input,select,textarea{background:#19211c;border-color:#3b4e42}
+.profile-pills button[aria-pressed=true]{background:#534168;color:#f4e6ff;border-color:#72598b}
+button,input,select,textarea{background:#433755;border-color:#69587c}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline-color:var(--teal)}
-.primary{background:var(--teal);color:#061a0e}
-.hero{background:radial-gradient(circle,#2be57835 1px,transparent 1.5px) 0 0/16px 16px,
-  linear-gradient(115deg,#121c16,#0c110e 64%);border-color:#365643;box-shadow:0 12px 28px #0004}
-.hero p{color:var(--muted)}
-.card,.panel,.summary>div,dialog,.scan-panel{background:#141a17}
-.tank-heading-arrow{background:#172a20;border-color:#3b5947}
-.tank-heading:hover .tank-heading-arrow{background:#213b2c}
-.reading-card .value,.dose-values strong,.summary strong{font-family:ui-monospace,Consolas,monospace;letter-spacing:-.045em}
-.reading-card:not([data-status=red],[data-status=yellow],[data-status=green]){border-left-color:#46544c}
-.dose-map{background:#232d27}
-.dose-path,.dose-marker.projected{background:#ed93e3}
-.dose-marker{border-color:#141a17}
-@media(max-width:600px){.bar nav{background:#101512}}
+.primary{background:linear-gradient(115deg,#e0b9fc,#bca3fb);color:#2c1742}
+.hero{background:radial-gradient(ellipse at 95% 0%,#754f91 0%,transparent 67%),
+  linear-gradient(115deg,#4b3765,#352a4b 72%);border-color:#745a89;box-shadow:0 8px 20px #19132445}
+.hero p{color:#e7d8f0}
+.card,.panel,.summary>div,dialog,.scan-panel,.settings-popover{background:#352d49}
+.card h3,.reading-head h3{color:var(--ink)}
+.tank-heading-arrow{background:#513f68;border-color:#82659a}
+.tank-heading:hover .tank-heading-arrow{background:#644c80}
+.reading-card:not([data-status=red],[data-status=yellow],[data-status=green]){border-left-color:#796990}
+.dose-map{background:#493c5d}
+.dose-path,.dose-marker.projected{background:#f0a5e6}
+.dose-marker{border-color:#352d49}
+input[data-scanned]{border-color:var(--teal)}
+@media(max-width:600px){
+  body{padding:8px 8px 0}
+  header,.bar{border-radius:15px 15px 0 0}
+  main{border-radius:0;min-height:calc(100vh - 66px)}
+  .bar nav{background:#352d49}
+}
 </style>
 </head>
 <body>
@@ -969,22 +979,22 @@ function draw() {
   }
   let lastLabel;
   for (const value of ticks) {
-    ctx.strokeStyle = '#344a3e';
+    ctx.strokeStyle = '#584a6c';
     ctx.beginPath(); ctx.moveTo(left,y(value)); ctx.lineTo(right,y(value)); ctx.stroke();
-    ctx.fillStyle = '#afbeb5';
+    ctx.fillStyle = '#d0c4df';
     const label = tickLabel(value);
     if (label !== lastLabel) ctx.fillText(label,0,y(value)+4);
     lastLabel = label;
   }
-  ctx.strokeStyle = '#31e878'; ctx.lineWidth = 2.5; ctx.beginPath();
+  ctx.strokeStyle = '#d2b4ff'; ctx.lineWidth = 2.5; ctx.beginPath();
   points.forEach((row,index) => index ? ctx.lineTo(x(row),y(row.value)) : ctx.moveTo(x(row),y(row.value)));
   ctx.stroke();
-  ctx.fillStyle = '#31e878';
+  ctx.fillStyle = '#d2b4ff';
   for (const row of points) {
     ctx.beginPath(); ctx.arc(x(row),y(row.value),3.5,0,Math.PI*2); ctx.fill();
   }
   const shortDate = value => new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric'});
-  ctx.fillStyle = '#afbeb5';
+  ctx.fillStyle = '#d0c4df';
   ctx.fillText(shortDate(dateStart),left,bottom+22);
   if (dateEnd !== dateStart) {
     const label = shortDate(dateEnd);
