@@ -186,6 +186,32 @@ input[data-scanned]{border-color:#48d8ee}
 .page-heading h1{font-size:clamp(1.9rem,5vw,2.8rem)}
 .task-compose>summary{cursor:pointer;font-weight:700}
 .task-compose[open]>summary{margin-bottom:12px}
+.parameter-row{border-inline-start:4px solid #536278}
+.parameter-row[data-status="green"]{border-inline-start-color:#4dd99b}
+.parameter-row[data-status="yellow"]{border-inline-start-color:#f7c754}
+.parameter-row[data-status="red"]{border-inline-start-color:#ff6c79}
+.workspace-heading{display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:12px}
+.workspace-heading .page-heading{flex:1}
+.workspace-toolbar{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.workspace-toolbar label{min-width:min(190px,100%)}
+.workspace-toolbar p{padding-block:3px}
+.form-group{margin:0;padding:12px 0 0;border:0;border-top:1px solid var(--line);min-inline-size:0}
+.form-group legend{padding:0 8px 0 0;font-weight:700}
+.task-layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
+.task-layout #task-list{grid-column:1;grid-row:1}
+.task-layout .task-compose{grid-column:2;grid-row:1}
+.target-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:10px}
+.target-grid .settings-row{border:1px solid var(--line);background:#101827;padding:12px;border-radius:10px}
+.reference-panel>summary{font-weight:700;cursor:pointer}
+.reference-panel>div{margin-top:12px}
+.account-panel{max-width:640px}
+.tank-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.chart-summary{border-top:1px solid var(--line);padding-top:12px}
+.history>h2{margin-bottom:8px}
+@media(max-width:700px){
+  .task-layout{grid-template-columns:1fr}
+  .task-layout #task-list,.task-layout .task-compose{grid-column:auto;grid-row:auto}
+}
 @media(max-width:600px){
   .bar{min-height:56px}
   main{padding:16px 12px calc(84px + env(safe-area-inset-bottom))}
@@ -616,8 +642,8 @@ function readTankDetails(data) {
 }
 
 function tanks() {
-  return `<section class="stack"><h1>Tanks</h1>
-    <div class="grid">${fleet.tanks.map(tank => `<article class="card"><h3>${esc(tank.log.name)}</h3>
+  return `<section class="stack"><div class="page-heading"><h1>Tanks</h1></div>
+    <div class="grid tank-grid">${fleet.tanks.map(tank => `<article class="card"><h3>${esc(tank.log.name)}</h3>
       ${tank.id === fleet.active ? '<span class="pill good">Active tank</span>' :
       `<button data-tank="${esc(tank.id)}">Switch to this tank</button>`}
       <div class="profile-pills" role="group" aria-label="Tank type for ${esc(tank.log.name)}">
@@ -632,7 +658,7 @@ function tanks() {
       </form>
       <div class="actions tank-actions"><button data-rename="${esc(tank.id)}" aria-label="Rename ${esc(tank.log.name)}">Rename</button>
       <button class="danger" data-remove-tank="${esc(tank.id)}" aria-label="Delete ${esc(tank.log.name)}">Delete</button></div></article>`).join('')}</div>
-    <form id="tank-form" class="panel stack"><h2>Add a tank</h2>
+    <form id="tank-form" class="panel stack account-panel"><h2>Add a tank</h2>
       <label>Tank name<input name="name" required maxlength="60"></label>
       ${tankSetupField()}
       ${tankVolumeFields(null)}
@@ -706,7 +732,7 @@ function parameterRow(item) {
   const advice = nextStep(item);
   const value = item.reading ? format(displayParameterValue(item.key,item.reading.value)) : '—';
   const status = item.reading ? `${value} ${item.unit}. ${item.label}.` : item.label;
-  return `<article class="parameter-row">
+  return `<article class="parameter-row" data-status="${item.color}">
     <button type="button" class="parameter-open" data-history="${item.key}" aria-label="View ${item.name} history. ${status}">
       <span class="parameter-label"><strong>${item.name}</strong><small>${range(item.setting,item.unit)}</small></span>
       <span class="parameter-reading"><strong>${value} <span class="unit">${item.unit}</span></strong>
@@ -766,17 +792,19 @@ function taskList() {
 function taskView() {
   return `<section class="stack">
     <div class="page-heading"><h1>Tasks</h1><p class="muted">${esc(state.name)}</p></div>
+    <p id="task-message" role="status"></p>
+    <div class="task-layout">
     <details class="panel task-compose" ${state.tasks.length ? '' : 'open'}><summary>Add a task</summary>
     <form id="task-form" class="stack">
       <label>Task type<select name="kind"><option value="general">General</option><option value="water">Water change</option></select></label>
       <label>Task<textarea name="text" rows="2" required maxlength="240" placeholder="e.g. Test alkalinity"></textarea></label>
       <label class="check"><input type="checkbox" name="remind" aria-controls="task-reminder-date"> Set a reminder</label>
       <label id="task-reminder-date" hidden>Reminder date<input type="date" name="reminder" disabled></label>
-      <p class="muted">Reminders appear in REEFLOG on the selected date.</p>
+      <p class="muted">Reminders appear in REEFLOG.</p>
       <div><button class="primary">Add task</button></div>
     </form></details>
-    <p id="task-message" role="status"></p>
     <div class="stack" id="task-list">${taskList()}</div>
+    </div>
   </section>`;
 }
 
@@ -788,31 +816,30 @@ function dosing() {
   return `<section class="stack"><div class="page-heading"><h1>Dosing</h1><p class="muted">${esc(state.name)}</p></div>
     <div class="dose-layout">
       <form id="dose-form" class="panel stack" data-tank="${esc(fleet.active)}" data-volume-unit="${volumeUnit}">
-        <h2>Dose details</h2>
-        <div class="actions"><p>${waterVolume ? `System water volume · <strong>${doseNumber(waterVolume.amount)} ${volumeUnit}</strong>` : 'Set the tank’s water volume to calculate and log doses.'}</p>
-          <button type="button" data-view="tanks">${waterVolume ? 'Edit in Tanks' : 'Set volume in Tanks'}</button></div>
-        <label>Brand and product<input name="brand" list="dose-products" autocomplete="off" required maxlength="100" value="${esc(last?.brand ?? '')}" placeholder="Start typing a brand or product"></label>
+        <div class="workspace-toolbar"><div><h2>Dose details</h2><p class="muted">${waterVolume ? `Water volume · ${doseNumber(waterVolume.amount)} ${volumeUnit}` : 'Tank volume required'}</p></div>
+          <button type="button" data-view="tanks">${waterVolume ? 'Edit volume' : 'Set volume in Tanks'}</button></div>
+        <label>Product<input name="brand" list="dose-products" autocomplete="off" required maxlength="100" value="${esc(last?.brand ?? '')}" placeholder="Search by brand or product"></label>
         <datalist id="dose-products">${DOSE_PRODUCTS.map(product => `<option value="${esc(product.name)}"></option>`).join('')}</datalist>
-        <label>Parameter it raises<select name="key">${DOSE_PARAMETERS.map(key =>
+        <label>Parameter to raise<select name="key">${DOSE_PARAMETERS.map(key =>
           `<option value="${key}" ${key===(last?.key ?? 'alk')?'selected':''}>${parameter(key)[1]}</option>`).join('')}</select></label>
         <div class="dose-fields">
-          <label>Amount of product<input name="amount" type="number" inputmode="decimal" step="any" min="0" required></label>
+          <label>Dose amount<input name="amount" type="number" inputmode="decimal" step="any" min="0" required></label>
           <label>Product unit<select name="unit">${DOSE_UNITS.map(unit => `<option ${unit===last?.unit?'selected':''}>${unit}</option>`).join('')}</select></label>
         </div>
-        <h3>Product label strength</h3>
+        <fieldset class="form-group stack"><legend>Label strength</legend>
         <p id="dose-label-note" class="muted"></p>
         <div class="dose-fields">
           <label>Label dose<input name="labelAmount" type="number" inputmode="decimal" step="any" min="0" required></label>
           <label>Label water volume (${volumeUnit})<input name="labelVolume" type="number" inputmode="decimal" step="any" min="0" required></label>
           <label><span>Label rise (<span id="dose-rise-unit"></span>)</span><input name="labelRise" type="number" inputmode="decimal" step="any" min="0" required></label>
-        </div>
+        </div></fieldset>
       </form>
       <section class="panel stack" aria-labelledby="dose-projection-heading">
-        <h2 id="dose-projection-heading">Projection map</h2>
+        <h2 id="dose-projection-heading">Dose projection</h2>
         <div id="dose-preview" aria-live="polite" class="stack"></div>
         <div id="dose-suggestion" class="stack" aria-live="polite"></div>
-        <p class="muted">This estimate applies to the entered dose only. Follow the product label and retest to measure the actual change.</p>
-        <div><button type="submit" form="dose-form" class="primary" ${waterVolume ? '' : 'disabled'}>Log dose added</button></div>
+        <p class="muted">Follow the label limits and retest after dosing.</p>
+        <div><button type="submit" form="dose-form" class="primary" ${waterVolume ? '' : 'disabled'}>Log dose</button></div>
         <p id="dose-message" role="status"></p>
       </section>
     </div>
@@ -827,7 +854,7 @@ function dosing() {
         <div class="actions">${pending ? '<button data-view="tasks">View retest task</button>' : !retest ?
           `<button data-schedule-retest="${esc(dose.id)}">Schedule retest</button>` : ''}
         <button class="danger" data-delete-dose="${esc(dose.id)}">Delete dose</button></div></article>`;
-    }).join('') || '<p class="muted">Doses you log for this tank appear here.</p>'}</section>
+    }).join('') || '<p class="muted">No doses logged.</p>'}</section>
   </section>`;
 }
 
@@ -931,8 +958,8 @@ function updateDosePreview() {
   const enteredRate = doseRate(dose.amount,dose.tankVolume,dose.volumeUnit,dose.unit);
   form.dataset.catalogStrength = matchesDoseProduct(input,product) ? 'yes' : '';
   main.querySelector('#dose-label-note').innerHTML = form.dataset.catalogStrength
-    ? `Strength filled from the <a href="${product.source}" target="_blank" rel="noopener noreferrer">manufacturer’s directions</a>. Check that it matches your label.`
-    : 'For a custom product, enter the label’s dose, the water volume it treats, and the rise it produces.';
+    ? `Check these values against your label. <a href="${product.source}" target="_blank" rel="noopener noreferrer">Manufacturer’s directions</a>`
+    : 'Use the dose, water volume, and expected rise printed on your label.';
   const rise = validDose(dose) ? doseIncrease(dose) : null;
   const result = latest && rise !== null ? latest.value + rise : null;
   const projected = Number.isFinite(result) ? result : null;
@@ -976,13 +1003,14 @@ function historyView() {
   const [key,name,unit] = parameter(selected);
   const readings = records(key);
   const trend = stabilityTrend(key,readings);
-  return `<section><div class="section-head"><h1>History</h1><button class="primary" data-add="${key}">Add water test</button></div>
-    <div class="panel"><p class="muted">${esc(state.name)}</p><label>Parameter<select id="history-filter">${PARAMETERS.map(([id,label]) => `<option value="${id}" ${id===key?'selected':''}>${label}</option>`).join('')}</select></label>
+  return `<section class="stack"><div class="workspace-heading"><div class="page-heading"><h1>History</h1><p class="muted">${esc(state.name)}</p></div><button class="primary" data-add="${key}">Add water test</button></div>
+    <div class="panel stack"><div class="workspace-toolbar"><label>Parameter<select id="history-filter">${PARAMETERS.map(([id,label]) => `<option value="${id}" ${id===key?'selected':''}>${label}</option>`).join('')}</select></label>
+    <p class="muted">${range(displayTarget(key,config(key)),unit)}${readings.length ? ` · ${Math.min(readings.length,60)} plotted` : ''}</p></div>
     ${readings.length ? `<canvas class="chart" id="chart" role="img" aria-label="${name} trend. Values are listed below."></canvas>
-    <p class="muted">${range(displayTarget(key,config(key)),unit)} · Latest ${Math.min(readings.length,60)} plotted</p>` : '<p class="muted">No readings for this parameter yet.</p>'}
-    <div class="stack"><h3>Stability trend</h3>${trend ? trendSummary(trend,unit,true) : '<p class="muted">Log at least three tests at different times to see a trend.</p>'}</div></div></section>
+    ` : ''}
+    <div class="chart-summary"><h3>Stability trend</h3>${trend ? trendSummary(trend,unit,true) : '<p class="muted">Available after three separate tests.</p>'}</div></div></section>
     <section class="panel history"><h2>${name} readings</h2>${readings.map(row => `<article><div><strong>${format(displayParameterValue(key,row.value))} ${unit}</strong><div class="muted">${dateText(row.date)}</div>
-    ${row.note ? `<p class="note">${esc(row.note)}</p>` : ''}</div><div class="actions"><button data-edit="${esc(row.id)}">Edit</button><button data-delete="${esc(row.id)}">Delete</button></div></article>`).join('') || '<p class="muted">Once saved, tests appear here.</p>'}</section>`;
+    ${row.note ? `<p class="note">${esc(row.note)}</p>` : ''}</div><div class="actions"><button data-edit="${esc(row.id)}">Edit</button><button class="danger" data-delete="${esc(row.id)}">Delete</button></div></article>`).join('') || '<p class="muted">No readings yet.</p>'}</section>`;
 }
 
 function draw() {
@@ -1050,17 +1078,17 @@ function urgentText({urgentLow,urgentHigh}) {
 }
 
 function targets() {
-  return `<section class="stack"><h1>Targets</h1>
-    <form id="salinity-units" class="panel stack"><h2>Salinity units</h2>
-      <label>Display and enter salinity as<select name="salinityUnit">
+  return `<section class="stack"><div class="page-heading"><h1>Targets</h1><p class="muted">${esc(state.name)} · ${CORAL_PROFILES[profileKey(state)].label} profile</p></div>
+    <form id="salinity-units" class="panel stack"><div class="workspace-toolbar">
+      <label>Salinity units<select name="salinityUnit">
         <option value="SG" ${salinityUnit()==='SG'?'selected':''}>Specific gravity (SG)</option>
         <option value="ppt" ${salinityUnit()==='ppt'?'selected':''}>Parts per thousand (ppt)</option>
       </select></label>
-      <p class="muted">Conversions use the seawater and freshwater densities at 25 °C.</p>
-      <div><button>Save salinity unit</button></div><p role="status" id="salinity-message"></p>
+      <div><button>Save unit</button></div></div><p role="status" id="salinity-message"></p>
     </form><form id="targets-form" class="panel stack">
     <label>Tank name<input name="name" required maxlength="60" value="${esc(state.name)}"></label>
-    <p class="muted">This tank uses the <strong>${CORAL_PROFILES[profileKey(state)].label}</strong> profile. Change profiles under Tanks. Custom ranges stay with the tank when you switch profiles.</p>
+    <p class="muted">Change the profile in Tanks. Custom ranges stay with this tank.</p>
+    <div class="target-grid">
     ${PARAMETERS.map(([key]) => {
       const [,name,unit] = parameter(key);
       const setting = displayTarget(key,config(key));
@@ -1069,22 +1097,22 @@ function targets() {
       <div class="fields"><label>Minimum<input name="${key}-low" type="number" step="any" value="${low ?? ''}"></label>
       <label>Maximum<input name="${key}-high" type="number" step="any" value="${high ?? ''}"></label>
       <label>Test interval (days)<input name="${key}-days" type="number" min="1" max="3650" step="1" value="${days ?? ''}"></label></div><p class="muted">Fix immediately · ${urgentText(setting)}</p><div class="actions target-type"><span class="muted" data-target-source="${key}">${custom ? 'Custom range' : 'Profile range'}</span><button type="button" data-reset-target="${key}">Use profile range</button></div></div>`;
-    }).join('')}
+    }).join('')}</div>
     <div><button class="primary">Save targets</button></div><p role="status" id="settings-message"></p></form></section>
-    <section class="panel stack"><h2>About tank profiles</h2>
+    <details class="panel reference-panel"><summary>Profile notes and sources</summary><div class="stack">
     <p>Soft uses wider nutrient and foundation ranges. SPS emphasizes stable alkalinity and narrower calcium and phosphate ranges. Mixed sits between them. FOWLR (fish only with live rock) has higher nutrient ceilings and no preset minimum for nitrate or phosphate. All profiles use a default salinity target of 1.024–1.026 SG. These are starting points for established tanks. Nutrient goals also vary with feeding and livestock. Enter total ammonia for the ammonia check. Nitrite and silicate use attention alerts as trends to investigate.</p>
     <p class="muted">Retest surprising results with a suitable kit before changing the tank. If the last test was days ago, take a fresh sample to see where the tank stands today.</p>
     <div class="source-links"><a href="https://g1.redseafish.com/reef-care-recipes/">Red Sea reef care recipes</a>
     <a href="https://www.reef2reef.com/ams/optimal-parameters-for-a-coral-reef-aquarium-by-randy-holmes-farley.79/">Holmes-Farley’s reef chemistry guide</a>
     <a href="https://blog.hannainst.com/aquarium_water_testing_importance">Hanna fish-only water-quality guidelines</a>
-    <a href="https://www.reef2reef.com/ams/ammonia-is-our-friend.1062/">Holmes-Farley on total ammonia</a></div></section>
+    <a href="https://www.reef2reef.com/ams/ammonia-is-our-friend.1062/">Holmes-Farley on total ammonia</a></div></div></details>
     `;
 }
 
 function backup() {
-  return `<section class="panel stack"><h1>Backup</h1><p>Export all tanks, readings, and targets or restore them from a backup file.</p>
+  return `<section class="stack"><div class="page-heading"><h1>Backup</h1></div><div class="panel stack account-panel"><p>Download or restore a copy of your tank data.</p>
     <div class="actions"><button id="export">Export backup</button><button id="import">Restore backup</button><input hidden id="backup" type="file" accept=".json,application/json"></div>
-    <p role="status" id="backup-message"></p></section>`;
+    <p role="status" id="backup-message"></p></div></section>`;
 }
 
 function localDate(value) {
@@ -1810,7 +1838,7 @@ function cacheCloud(current,log,version,pending) {
 }
 
 function account() {
-  if (!cloud && sharedInvite) return `<section class="panel stack"><h1>Create your Reef Log account</h1>
+  if (!cloud && sharedInvite) return `<section class="panel stack account-panel"><h1>Create your Reef Log account</h1>
     <p>Enter your email and choose a password to save your tank logs.</p>
     <form id="shared-signup" class="stack">
       <label>Email address<input type="email" name="email" autocomplete="username" required maxlength="254"></label>
@@ -1820,13 +1848,13 @@ function account() {
     </form>
     <p id="cloud-status" role="status">${esc(authMessage)}</p>
     <div><button data-cloud="show-signin">Already have an account? Sign in</button></div></section>`;
-  if (!cloud) return `<section class="panel stack"><h1>Account</h1>
-    <p>Use your invited email and password. New accounts require an invitation from the Reef Log owner.</p>
+  if (!cloud) return `<section class="panel stack account-panel"><h1>Account</h1>
+    <p>Sign in with your invited email and password.</p>
     <form id="email-signin" class="stack"><label>Email address<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><div><button class="primary">Sign in</button></div></form>
     <p id="cloud-status" role="status">${esc(authMessage)}</p></section>`;
   if (passwordSetupUser === cloud.id) {
     const isInvite = passwordSetupType === 'invite';
-    return `<section class="panel stack"><h1>${isInvite ? 'Create your Reef Log account' : 'Set account password'}</h1>
+    return `<section class="panel stack account-panel"><h1>${isInvite ? 'Create your Reef Log account' : 'Set account password'}</h1>
       <p>${isInvite ? 'Use the email on your invitation and choose a password.' : 'Choose a new password for this account.'}</p>
       <form id="set-password" class="stack">
         <label>Email address<input type="email" name="email" value="${esc(cloud.email)}" autocomplete="username" readonly></label>
@@ -1838,7 +1866,7 @@ function account() {
     </section>`;
   }
   const canImport = cloud.ready && !cloud.version && !cloud.pending && hasBrowserLog();
-  return `<section class="panel stack"><h1>Account</h1><p>Signed in as ${esc(cloud.email)}</p>
+  return `<section class="panel stack account-panel"><h1>Account</h1><p>Signed in as ${esc(cloud.email)}</p>
     <p id="cloud-status" role="status">${esc(cloud.message)}</p>
     <div class="actions">
       ${canImport ? '<button class="primary" data-cloud="import">Import this browser’s log</button>' : ''}
