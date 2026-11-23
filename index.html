@@ -117,11 +117,18 @@ input[data-scanned]{border-color:#48d8ee}
 .dose-marker.projected{background:#5ed9f3;border-radius:3px;transform:translateX(-50%) rotate(45deg)}
 .dose-legend{margin:0;color:var(--muted)}
 #dose-suggestion{border-top:1px solid var(--line);padding-top:14px}
+.task-row{display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--line);padding-block:10px;cursor:pointer}
+.task-row input{accent-color:var(--teal);margin-top:5px}
+.task-row span{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
+.task-row small{display:block}
+.task-due{color:#f7c754}
+.task-complete .task-title{color:var(--muted);text-decoration:line-through}
+#task-reminder-date[hidden],#task-message:empty{display:none}
 @media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="tanks">Tanks</button><button data-view="history">History</button><button data-view="dosing">Dosing</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
+<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="history">History</button><button data-view="dosing">Dosing</button><button data-view="tasks">To Do</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="tanks">Tanks</button><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
 <main id="main"></main>
 <dialog id="entry"><form id="test-form" class="stack"></form></dialog>
 <dialog id="rename-tank" aria-labelledby="rename-title">
@@ -202,7 +209,7 @@ const DOSE_PRODUCTS = [
   {name:'Red Sea Foundation B KH/Alkalinity (liquid)',key:'alk',unit:'mL',amount:1,liters:100,rise:.1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'},
   {name:'Red Sea Foundation C Magnesium (liquid)',key:'mg',unit:'mL',amount:1,liters:100,rise:1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'}
 ];
-const defaults = () => ({version:1, name:'My reef', profile:'mixed', salinityUnit:'SG', waterVolume:null, settings:{}, readings:[], doses:[]});
+const defaults = () => ({version:1, name:'My reef', profile:'mixed', salinityUnit:'SG', waterVolume:null, settings:{}, readings:[], doses:[], tasks:[]});
 let fleet = {version:2, active:'first', tanks:[{id:'first',log:defaults()}]};
 let state = fleet.tanks[0].log;
 let loadError = '';
@@ -256,9 +263,28 @@ function validate(data) {
     return {id:row.id,key:row.key,value:row.value,date:new Date(row.date).toISOString(),note:row.note};
   });
   const doses = Object.hasOwn(data,'doses') ? validateDoses(data.doses) : [];
+  const tasks = Object.hasOwn(data,'tasks') ? validateTasks(data.tasks) : [];
   const waterVolume = validateWaterVolume(Object.hasOwn(data,'waterVolume') ? data.waterVolume : null);
   return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),salinityUnit:data.salinityUnit === 'ppt' ? 'ppt' : 'SG',
-    waterVolume,settings,readings,doses};
+    waterVolume,settings,readings,doses,tasks};
+}
+
+function validTaskDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === value;
+}
+
+function validateTasks(rows) {
+  if (!Array.isArray(rows)) throw Error('Invalid tasks');
+  const ids = new Set();
+  return rows.map(task => {
+    if (!task || typeof task.id !== 'string' || !task.id || ids.has(task.id) ||
+        typeof task.text !== 'string' || !task.text.trim() || typeof task.done !== 'boolean' ||
+        (task.reminder !== null && !validTaskDate(task.reminder))) throw Error('Invalid task');
+    ids.add(task.id);
+    return {id:task.id,text:task.text.trim().slice(0,240),done:task.done,reminder:task.reminder};
+  });
 }
 
 function validateWaterVolume(volume) {
@@ -439,7 +465,7 @@ function render() {
     else button.removeAttribute('aria-current');
   });
   main.innerHTML = (loadError ? '<p class="alert" role="alert">' + esc(loadError) + '</p>' : '') +
-    ({overview,history:historyView,dosing,targets,backup,tanks,account}[page])() +
+    ({overview,history:historyView,dosing,tasks:taskView,targets,backup,tanks,account}[page])() +
     (cloud ? '<p class="footer">Manage cloud sync and backups in Settings.</p>' :
     '<p class="footer">Your log is stored in this browser. Sign in from Settings to sync across devices.</p>');
   if (page === 'history') draw();
@@ -532,6 +558,7 @@ function nextStep(item) {
 }
 
 function overview() {
+  const dueCount = state.tasks.filter(task => taskIsDue(task)).length;
   const items = active().map(([key,name,unit]) => {
     const setting = config(key);
     const reading = records(key)[0];
@@ -541,6 +568,7 @@ function overview() {
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
   const count = color => items.filter(item => item.color === color).length;
   return `<section class="hero"><div><h1>${esc(state.name)}</h1><p>${CORAL_PROFILES[profileKey(state)].label}${profileKey(state) === 'fowlr' ? '' : ' reef'} · Water parameters</p></div><button class="primary" data-add>Add water test</button></section>
+  ${dueCount ? `<section class="panel actions"><span class="task-due">${dueCount} ${dueCount === 1 ? 'task' : 'tasks'} due</span><button data-view="tasks">Open To Do</button></section>` : ''}
   <section aria-label="Reading summary" class="summary">
     ${[['green','Healthy'],['yellow','Needs attention'],['red','Fix immediately']].map(([color,label]) =>
       `<div><span class="dot ${color}" aria-hidden="true"></span><strong>${count(color)}</strong><span>${label}</span></div>`).join('')}
@@ -552,6 +580,41 @@ function overview() {
       <div class="reading-meta"><span>${range(item.setting,item.unit)}</span>${item.reading ? `<time datetime="${item.reading.date}">${dateText(item.reading.date)}</time>` : ''}</div>
       ${nextStep(item) ? `<p class="next-step">${nextStep(item)}</p>` : ''}
       <button data-history="${item.key}">View history</button></article>`).join('') || '<p>Enable a parameter in Settings under Targets.</p>'}</div>
+  </section>`;
+}
+
+function taskIsDue(task,today = localDate(Date.now()).slice(0,10)) {
+  return !task.done && task.reminder !== null && task.reminder <= today;
+}
+
+function taskList() {
+  const today = localDate(Date.now()).slice(0,10);
+  const open = state.tasks.filter(task => !task.done).sort((a,b) => (a.reminder ?? '9999-12-31').localeCompare(b.reminder ?? '9999-12-31'));
+  const completed = state.tasks.filter(task => task.done);
+  const row = task => {
+    const due = taskIsDue(task,today);
+    const prefix = task.done ? 'Reminder was' : task.reminder < today ? 'Overdue' : due ? 'Due today' : 'Reminder';
+    return `<label class="task-row ${task.done ? 'task-complete' : ''}">
+      <input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''}>
+      <span><span class="task-title">${esc(task.text)}</span>${task.reminder ? `<small class="${due ? 'task-due' : 'muted'}">${prefix} · <time datetime="${task.reminder}">${new Date(task.reminder+'T12:00:00').toLocaleDateString(undefined,{dateStyle:'medium'})}</time></small>` : ''}</span>
+    </label>`;
+  };
+  return `<div class="panel stack"><h2>Open tasks</h2>${open.map(row).join('') || '<p class="muted">No open tasks.</p>'}</div>
+    ${completed.length ? `<div class="panel stack"><h2>Completed</h2>${completed.map(row).join('')}</div>` : ''}`;
+}
+
+function taskView() {
+  return `<section class="stack">
+    <div><h1>To Do</h1><p class="muted">${esc(state.name)}</p></div>
+    <form id="task-form" class="panel stack">
+      <label>Task<textarea name="text" rows="2" required maxlength="240" placeholder="e.g. Test alkalinity"></textarea></label>
+      <label class="check"><input type="checkbox" name="remind" aria-controls="task-reminder-date"> Set a reminder</label>
+      <label id="task-reminder-date" hidden>Reminder date<input type="date" name="reminder" disabled></label>
+      <p class="muted">Reminders appear in REEFLOG on the selected date.</p>
+      <div><button class="primary">Add task</button></div>
+    </form>
+    <p id="task-message" role="status"></p>
+    <div class="stack" id="task-list">${taskList()}</div>
   </section>`;
 }
 
@@ -1163,7 +1226,7 @@ document.addEventListener('click',event => {
   }
   if (button.dataset.removeTank) {
     const tank = fleet.tanks.find(item => item.id === button.dataset.removeTank);
-    const message = tank && 'Delete “' + tank.log.name + '” and all of its readings, doses and targets? This cannot be undone.' +
+    const message = tank && 'Delete “' + tank.log.name + '” and all of its readings, doses, targets and tasks? This cannot be undone.' +
       (fleet.tanks.length === 1 ? ' A new empty tank will be created.' : '');
     if (message && confirm(message)) {
       try { removeTank(tank.id); render(); main.querySelector('#tank-form input')?.focus(); }
@@ -1224,6 +1287,27 @@ main.addEventListener('input',event => {
 });
 
 main.addEventListener('submit',event => {
+  if (event.target.id === 'task-form') {
+    event.preventDefault();
+    const form = event.target;
+    const data = new FormData(form);
+    const text = data.get('text').trim();
+    const reminder = data.has('remind') ? data.get('reminder') : null;
+    const message = main.querySelector('#task-message');
+    if (!text) { message.textContent = 'Enter a task.'; return; }
+    if (data.has('remind') && !validTaskDate(reminder)) {
+      message.textContent = 'Choose a reminder date.';
+      return;
+    }
+    const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
+    try {
+      save({...state,tasks:[...state.tasks,{id,text:text.slice(0,240),reminder,done:false}]});
+      render();
+      main.querySelector('#task-message').textContent = 'Task added.';
+      main.querySelector('#task-form textarea')?.focus();
+    } catch { message.textContent = 'Could not save the task.'; }
+    return;
+  }
   if (event.target.id === 'salinity-units') {
     event.preventDefault();
     const unit = new FormData(event.target).get('salinityUnit');
@@ -1342,6 +1426,30 @@ main.addEventListener('submit',event => {
 });
 
 main.addEventListener('change',async event => {
+  const control = event.target;
+  if (control.form?.id === 'task-form' && control.name === 'remind') {
+    const reminder = control.form.elements.namedItem('reminder');
+    main.querySelector('#task-reminder-date').hidden = !control.checked;
+    reminder.disabled = !control.checked;
+    reminder.required = control.checked;
+    return;
+  }
+  if (control.dataset?.task) {
+    const id = control.dataset.task;
+    const task = state.tasks.find(item => item.id === id);
+    if (!task) return;
+    const message = main.querySelector('#task-message');
+    try {
+      save({...state,tasks:state.tasks.map(item => item.id === id ? {...item,done:control.checked} : item)});
+      main.querySelector('#task-list').innerHTML = taskList();
+      main.querySelector('[data-task="' + CSS.escape(id) + '"]')?.focus();
+      message.textContent = control.checked ? 'Task completed.' : 'Task reopened.';
+    } catch {
+      control.checked = task.done;
+      message.textContent = 'Could not update the task.';
+    }
+    return;
+  }
   if (event.target.id === 'history-filter') { selected=event.target.value; render(); document.querySelector('#history-filter').focus(); }
   if (event.target.id !== 'backup') return;
   const file = event.target.files[0];
