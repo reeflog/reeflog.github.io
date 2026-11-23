@@ -1084,12 +1084,18 @@ function historyView() {
     ${row.note ? `<p class="note">${esc(row.note)}</p>` : ''}</div><div class="actions"><button data-edit="${esc(row.id)}">Edit</button><button class="danger" data-delete="${esc(row.id)}">Delete</button></div></article>`).join('') || '<p class="muted">No readings yet.</p>'}</section>`;
 }
 
-function chartTicks(min,max,gravity) {
+const API_CHART_STEPS = {ca:20,po4:.25,alk:1,no3:5,no2:.25,nh3:.25,ph:.2};
+
+function chartTicks(min,max,key,gravity) {
   const spread = max-min;
-  const minimum = gravity ? .001 : .05;
-  const step = Math.max(minimum,5*10**Math.ceil(Math.log10(spread/30)));
-  const first = Math.floor(min/step+1e-9);
-  const last = Math.max(first+2,Math.ceil(max/step-1e-9));
+  const base = API_CHART_STEPS[key] ?? (gravity ? .001 : .05);
+  const step = base*Math.max(1,Math.ceil(spread/base/6));
+  let first = Math.floor(min/step+1e-9);
+  let last = Math.ceil(max/step-1e-9);
+  if (last-first < 2) {
+    if (first > 0) first--;
+    last = Math.max(first+2,last);
+  }
   return Array.from({length:last-first+1},(_,i) => (first+i)*step);
 }
 
@@ -1103,8 +1109,8 @@ function draw() {
   const target = config(selected);
   const low = chartValue(target.low), high = chartValue(target.high);
   const series = points.map(row => row.value);
-  const min = Math.min(...series,...[low,high].filter(value => value !== null));
-  const max = Math.max(...series,...[low,high].filter(value => value !== null));
+  const min = Math.min(...series);
+  const max = Math.max(...series);
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const {width,height} = canvas.getBoundingClientRect();
@@ -1114,7 +1120,7 @@ function draw() {
   ctx.scale(scale,scale);
   const top = 12, bottom = height-32;
   ctx.font = '12px system-ui';
-  const ticks = chartTicks(min,max,gravity);
+  const ticks = chartTicks(min,max,selected,gravity);
   const tickLabel = value => value.toLocaleString(undefined,{minimumFractionDigits:gravity ? 3 : 2,maximumFractionDigits:gravity ? 3 : 2});
   const left = Math.max(45,...ticks.map(value => ctx.measureText(tickLabel(value)).width+10));
   const right = width-12;
@@ -1123,9 +1129,10 @@ function draw() {
   const dateEnd = Date.parse(points.at(-1).date);
   const x = row => dateEnd === dateStart ? (left+right)/2 : left+(Date.parse(row.date)-dateStart)/(dateEnd-dateStart)*(right-left);
   if (low !== null || high !== null) {
-    const start = high === null ? top : y(high);
+    const start = high === null ? top : Math.max(top,y(high));
+    const end = low === null ? bottom : Math.min(bottom,y(low));
     ctx.fillStyle = '#193c3e';
-    ctx.fillRect(left,start,right-left,(low === null ? bottom : y(low))-start);
+    if (end > start) ctx.fillRect(left,start,right-left,end-start);
   }
   for (const value of ticks) {
     ctx.strokeStyle = '#32445a';
