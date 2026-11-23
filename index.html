@@ -200,9 +200,8 @@ input[data-scanned]{border-color:#48d8ee}
 .workspace-toolbar p{padding-block:3px}
 .form-group{margin:0;padding:12px 0 0;border:0;border-top:1px solid var(--line);min-inline-size:0}
 .form-group legend{padding:0 8px 0 0;font-weight:700}
-.task-layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
-.task-layout #task-list{grid-column:1;grid-row:1}
-.task-layout .task-compose{grid-column:2;grid-row:1}
+.task-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+#completed-tasks:empty{display:none}
 .target-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:10px}
 .target-grid .settings-row{border:1px solid var(--line);background:#101827;padding:12px;border-radius:10px}
 .reference-panel>summary{font-weight:700;cursor:pointer}
@@ -226,7 +225,6 @@ input[data-scanned]{border-color:#48d8ee}
 .history>h2{margin-bottom:8px}
 @media(max-width:700px){
   .task-layout{grid-template-columns:1fr}
-  .task-layout #task-list,.task-layout .task-compose{grid-column:auto;grid-row:auto}
 }
 @media(max-width:600px){
   .bar{min-height:56px}
@@ -841,10 +839,10 @@ function outstandingTasks() {
   </section>`;
 }
 
-function taskList() {
+function taskList(completed = false) {
   const today = localDate(Date.now()).slice(0,10);
-  const open = openTasks().filter(task => task.kind !== 'water');
-  const completed = state.tasks.filter(task => task.done && task.kind !== 'water');
+  const tasks = (completed ? state.tasks.filter(task => task.done) : openTasks()).filter(task => task.kind !== 'water');
+  if (completed && !tasks.length) return '';
   const row = task => {
     return `<div class="task-row ${task.done ? 'task-complete' : ''}">
       <label><input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''} ${task.doseId ? 'disabled' : ''}><span class="task-check" aria-hidden="true"></span>
@@ -853,16 +851,21 @@ function taskList() {
       <button type="button" class="danger" data-delete-task="${esc(task.id)}" aria-label="Delete task ${esc(task.text)}">Delete</button></div>
     </div>`;
   };
-  return `<div class="panel stack"><h2>Open tasks</h2>${open.map(row).join('') || '<p class="muted">No open tasks.</p>'}</div>
-    ${completed.length ? `<div class="panel stack"><h2>Completed</h2>${completed.map(row).join('')}</div>` : ''}`;
+  return `<div class="panel stack"><h2>${completed ? 'Completed' : 'Open tasks'}</h2>${tasks.map(row).join('') || '<p class="muted">No open tasks.</p>'}</div>`;
+}
+
+function refreshTaskLists() {
+  main.querySelector('#task-list').innerHTML = taskList();
+  main.querySelector('#completed-tasks').innerHTML = taskList(true);
 }
 
 function taskView() {
   return `<section class="stack">
     <div class="page-heading"><h1>Tasks</h1><p class="muted">${esc(state.name)}</p></div>
     <p id="task-message" role="status"></p>
-    <section id="water-changes" class="panel stack water-change-panel">${waterChangePanel()}</section>
+    <div id="task-list">${taskList()}</div>
     <div class="task-layout">
+    <section id="water-changes" class="panel stack water-change-panel">${waterChangePanel()}</section>
     <details class="panel task-compose" ${state.tasks.length ? '' : 'open'}><summary>Add a task</summary>
     <form id="task-form" class="stack">
       <label>Task<textarea name="text" rows="2" required maxlength="240" placeholder="e.g. Test alkalinity"></textarea></label>
@@ -871,8 +874,8 @@ function taskView() {
       <p class="muted">Reminders appear in REEFLOG.</p>
       <div><button class="primary">Add task</button></div>
     </form></details>
-    <div class="stack" id="task-list">${taskList()}</div>
     </div>
+    <div id="completed-tasks">${taskList(true)}</div>
   </section>`;
 }
 
@@ -1713,7 +1716,7 @@ document.addEventListener('click',event => {
     const message = main.querySelector('#task-message');
     try {
       save({...state,tasks:state.tasks.filter(task => task.id !== button.dataset.deleteTask)});
-      main.querySelector('#task-list').innerHTML = taskList();
+      refreshTaskLists();
       const water = main.querySelector('#water-changes');
       if (water) water.innerHTML = waterChangePanel();
       const next = main.querySelector('[data-delete-task]') ?? main.querySelector('.task-compose summary');
@@ -1921,7 +1924,7 @@ main.addEventListener('change',async event => {
     const message = main.querySelector('#task-message');
     try {
       save({...state,tasks:state.tasks.map(item => item.id === id ? {...item,done:control.checked} : item)});
-      main.querySelector('#task-list').innerHTML = taskList();
+      refreshTaskLists();
       main.querySelector('[data-task="' + CSS.escape(id) + '"]')?.focus();
       message.textContent = control.checked ? 'Task completed.' : 'Task reopened.';
     } catch {
