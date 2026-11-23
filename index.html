@@ -223,6 +223,10 @@ input[data-scanned]{border-color:#48d8ee}
 .chart-tooltip{position:absolute;z-index:1;transform:translate(-50%,-100%);pointer-events:none;
   background:#0c1521;border:1px solid #486477;border-radius:8px;padding:6px 9px;text-align:center;white-space:nowrap;font-size:.8rem}
 .chart-tooltip strong,.chart-tooltip span{display:block}
+.history-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:12px}
+.history-charts .chart{height:210px}
+.testing-history>summary{cursor:pointer;font-weight:700}
+.testing-history article:first-of-type{margin-top:12px}
 .history>h2{margin-bottom:8px}
 @media(max-width:700px){
   .task-layout{grid-template-columns:1fr}
@@ -344,7 +348,6 @@ try {
   loadError = 'The saved log could not be opened. You can restore a backup from Settings > Backup.';
 }
 let page = 'overview';
-let selected = 'alk';
 let readingFilter = '';
 
 function validateFleet(data) {
@@ -570,7 +573,6 @@ function removeTank(tankId) {
 
 function activate(next) {
   saveFleet(next);
-  selected = 'alk';
   page = 'overview';
   render();
   window.scrollTo(0,0);
@@ -594,6 +596,7 @@ function assess(reading,{low,high,days,urgentLow,urgentHigh}) {
 }
 
 function render() {
+  const testingHistoryOpen = page === 'history' && main.querySelector('#testing-history')?.open;
   const doseForm = page === 'dosing' ? main.querySelector('#dose-form') : null;
   const doseDraft = doseForm?.dataset?.tank === fleet.active ? new FormData(doseForm) : null;
   document.querySelectorAll('[data-view]').forEach(button => {
@@ -604,7 +607,10 @@ function render() {
     ({overview,history:historyView,dosing,tasks:taskView,targets,backup,tanks,account}[page])() +
     (cloud ? '<p class="footer">Manage cloud sync and backups in Settings.</p>' :
     '<p class="footer">Your log is stored in this browser. Sign in from Settings to sync across devices.</p>');
-  if (page === 'history') draw();
+  if (page === 'history') {
+    if (testingHistoryOpen) main.querySelector('#testing-history').open = true;
+    draw();
+  }
   if (page === 'dosing') {
     const form = main.querySelector('#dose-form');
     if (doseDraft) {
@@ -1070,22 +1076,31 @@ function trendSummary(trend,unit,includeRange = false) {
   return `<p class="parameter-trend"><strong>${trend.label}</strong> over the last ${trend.count} tests${includeRange ? ` · Observed ${spread}${suffix}` : ''}</p>`;
 }
 
-function historyView() {
-  const [key,name,unit] = parameter(selected);
+function historyChart(key,name,unit) {
   const readings = records(key);
   const trend = stabilityTrend(key,readings);
-  return `<section class="stack"><div class="workspace-heading"><div class="page-heading"><h1>History</h1><p class="muted">${esc(state.name)}</p></div><button class="primary" data-add="${key}">Add water test</button></div>
-    <div class="panel stack"><div class="workspace-toolbar"><label>Parameter<select id="history-filter">${PARAMETERS.map(([id,label]) => `<option value="${id}" ${id===key?'selected':''}>${label}</option>`).join('')}</select></label>
-    <p class="muted">${range(displayTarget(key,config(key)),unit)}${readings.length ? ` · ${Math.min(readings.length,60)} plotted` : ''}</p></div>
-    ${readings.length ? `<div class="chart-wrap"><canvas class="chart" id="chart" tabindex="0" role="img" aria-label="${name} trend. Hover, tap a dot, or use arrow keys to inspect readings."></canvas><div class="chart-tooltip" id="chart-tooltip" role="status" hidden></div></div>
-    ` : ''}
-    <div class="chart-summary"><h3>Stability trend</h3>${trend ? trendSummary(trend,unit,true) : '<p class="muted">Available after three separate tests.</p>'}</div></div></section>
-    <section class="panel history"><h2>${name} readings</h2>${readings.map(row => `<article><div><strong>${format(displayParameterValue(key,row.value))} ${unit}</strong><div class="muted">${dateText(row.date)}</div>
-    ${row.note ? `<p class="note">${esc(row.note)}</p>` : ''}</div><div class="actions"><button data-edit="${esc(row.id)}">Edit</button><button class="danger" data-delete="${esc(row.id)}">Delete</button></div></article>`).join('') || '<p class="muted">No readings yet.</p>'}</section>`;
+  return `<section class="panel stack" id="history-${key}" tabindex="-1"><div><h2>${name}</h2>
+    <p class="muted">${range(displayTarget(key,config(key)),unit)} · ${Math.min(readings.length,60)} plotted</p></div>
+    <div class="chart-wrap"><canvas class="chart" data-chart="${key}" tabindex="0" role="img" aria-label="${name} trend. Hover, tap a dot, or use arrow keys to inspect readings."></canvas><div class="chart-tooltip" role="status" hidden></div></div>
+    ${trend ? `<div class="chart-summary">${trendSummary(trend,unit,true)}</div>` : ''}</section>`;
+}
+
+function historyView() {
+  const logged = new Set(state.readings.map(row => row.key));
+  const parameters = PARAMETERS.filter(([key]) => logged.has(key)).map(([key]) => parameter(key));
+  const readings = state.readings.filter(row => parameter(row.key)).sort((a,b) => b.date.localeCompare(a.date));
+  return `<section class="stack"><div class="workspace-heading"><div class="page-heading"><h1>History</h1><p class="muted">${esc(state.name)}</p></div><button class="primary" data-add>Add water test</button></div>
+    ${parameters.length ? `<div class="history-charts">${parameters.map(([key,name,unit]) => historyChart(key,name,unit)).join('')}</div>` : '<p class="panel muted">No readings yet.</p>'}
+    <details id="testing-history" class="panel history testing-history"><summary>Testing history (${readings.length})</summary>${readings.map(row => {
+      const [key,name,unit] = parameter(row.key);
+      const value = key === 'alk' ? format(Math.round(row.value)) : format(displayParameterValue(key,row.value));
+      return `<article><div><strong>${name} · ${value} ${unit}</strong><div class="muted">${dateText(row.date)}</div>
+      ${row.note ? `<p class="note">${esc(row.note)}</p>` : ''}</div><div class="actions"><button data-edit="${esc(row.id)}">Edit</button><button class="danger" data-delete="${esc(row.id)}">Delete</button></div></article>`;
+    }).join('') || '<p class="muted">No readings yet.</p>'}</details></section>`;
 }
 
 const API_CHART_STEPS = {ca:20,po4:.25,alk:1,no3:5,no2:.25,nh3:.25,ph:.2};
-const CHART_DECIMALS = {ph:1,po4:1,no3:0,ca:0,mg:0};
+const CHART_DECIMALS = {alk:0,ph:1,po4:1,no3:0,ca:0,mg:0};
 
 function chartTicks(min,max,key,gravity) {
   const spread = max-min;
@@ -1101,8 +1116,10 @@ function chartTicks(min,max,key,gravity) {
 }
 
 function draw() {
-  const canvas = document.querySelector('#chart');
-  if (!canvas) return;
+  document.querySelectorAll('[data-chart]').forEach(canvas => drawHistoryChart(canvas,canvas.dataset.chart));
+}
+
+function drawHistoryChart(canvas,selected) {
   const gravity = selected === 'salt' && salinityUnit() === 'SG';
   const chartValue = value => gravity && value !== null
     ? salinityToGravity(value) : value;
@@ -1158,7 +1175,7 @@ function draw() {
     const label = shortDate(dateEnd);
     ctx.fillText(label,right-ctx.measureText(label).width,bottom+22);
   }
-  const tooltip = document.querySelector('#chart-tooltip');
+  const tooltip = canvas.nextElementSibling;
   const [,name,unit] = parameter(selected);
   let activeIndex = -1;
   const showPoint = index => {
@@ -1631,7 +1648,6 @@ function showEntry(key,row) {
     }
     try {
       save({...state,readings:[...state.readings.filter(item => item.id !== row?.id),...added]});
-      if (page === 'history' && row) selected = added[0].key;
       dialog.close();
       render();
     } catch { error.textContent = 'Could not save in this browser.'; }
@@ -1703,7 +1719,13 @@ document.addEventListener('click',event => {
     form.elements.namedItem(key+'-high').value = target.high ?? '';
     form.querySelector('[data-target-source="' + key + '"]').textContent = 'Profile range selected. Save to apply.';
   }
-  if (button.dataset.history) { selected=button.dataset.history; page='history'; render(); window.scrollTo(0,0); }
+  if (button.dataset.history) {
+    page='history';
+    render();
+    const chart = main.querySelector('#history-' + button.dataset.history);
+    if (chart) chart.focus();
+    else window.scrollTo(0,0);
+  }
   if (button.dataset.rename) {
     const tank = fleet.tanks.find(item => item.id === button.dataset.rename);
     if (tank) showRename(tank);
@@ -1969,7 +1991,6 @@ main.addEventListener('change',async event => {
     }
     return;
   }
-  if (event.target.id === 'history-filter') { selected=event.target.value; render(); document.querySelector('#history-filter').focus(); }
   if (event.target.id !== 'backup') return;
   const file = event.target.files[0];
   event.target.value = '';
