@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#223753">
+<meta name="theme-color" content="#101827">
 <title>Reef Log</title>
 <style>
 :root{font:16px/1.5 system-ui,sans-serif;color:#132c32;background:#eef5f3;--ink:#132c32;--muted:#506970;--line:#d5e5e1;--teal:#087667}
@@ -146,39 +146,6 @@ input[data-scanned]{border-color:#48d8ee}
 .task-complete .task-title{color:var(--muted);text-decoration:line-through}
 #task-reminder-date[hidden],#task-message:empty{display:none}
 @media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
-/* Navy dashboard framed by a blue gradient. */
-:root{background:#4173b9;--ink:#f3f8ff;--muted:#bdcde5;--line:#425672;--teal:#a8d2ff;color:var(--ink)}
-body{min-height:100vh;background:linear-gradient(125deg,#52b0ed 0%,#5b92dc 43%,#355aad 100%) fixed;padding:clamp(12px,3vw,36px) 12px}
-header,main{max-width:1120px;margin-inline:auto;background:#192943}
-header{border:0;border-radius:22px 22px 0 0}
-.bar{max-width:none;border-bottom:1px solid #3a506f;border-radius:22px 22px 0 0;background:#223753}
-main{border-radius:0 0 22px 22px;min-height:calc(100vh - 120px);box-shadow:0 18px 38px #112d6050}
-.brand{color:var(--ink)}
-.brand span,.brand:hover,.source-links a,.panel a{color:var(--teal)}
-nav button,.settings-menu summary{color:var(--muted)}
-nav button[aria-current],.settings-menu[open] summary,.settings-menu:has(button[aria-current]) summary,
-.profile-pills button[aria-pressed=true]{background:#304e77;color:#e5f2ff;border-color:#5276a5}
-button,input,select,textarea{background:#2a4262;border-color:#49678d}
-button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline-color:var(--teal)}
-.primary{background:linear-gradient(115deg,#bae0ff,#8ab9f9);color:#142b4d}
-.hero{background:radial-gradient(ellipse at 95% 0%,#426da0 0%,transparent 67%),
-  linear-gradient(115deg,#2d4b77,#223857 72%);border-color:#5176a0;box-shadow:0 8px 20px #101e3545}
-.hero p{color:#d9e9fc}
-.card,.panel,.summary>div,dialog,.scan-panel,.settings-popover{background:#223753}
-.card h3,.reading-head h3{color:var(--ink)}
-.tank-heading-arrow{background:#31547d;border-color:#638bb4}
-.tank-heading:hover .tank-heading-arrow{background:#3c6592}
-.reading-card:not([data-status=red],[data-status=yellow],[data-status=green]){border-left-color:#657e9d}
-.dose-map{background:#314967}
-.dose-path,.dose-marker.projected{background:#9bc7ff}
-.dose-marker{border-color:#223753}
-input[data-scanned]{border-color:var(--teal)}
-@media(max-width:600px){
-  body{padding:8px 8px 0}
-  header,.bar{border-radius:15px 15px 0 0}
-  main{border-radius:0;min-height:calc(100vh - 66px)}
-  .bar nav{background:#223753}
-}
 </style>
 </head>
 <body>
@@ -974,27 +941,27 @@ function draw() {
   const x = row => dateEnd === dateStart ? (left+right)/2 : left+(Date.parse(row.date)-dateStart)/(dateEnd-dateStart)*(right-left);
   if (low !== null || high !== null) {
     const start = high === null ? top : y(high);
-    ctx.fillStyle = '#1b3929';
+    ctx.fillStyle = '#193c3e';
     ctx.fillRect(left,start,right-left,(low === null ? bottom : y(low))-start);
   }
   let lastLabel;
   for (const value of ticks) {
-    ctx.strokeStyle = '#435c7d';
+    ctx.strokeStyle = '#32445a';
     ctx.beginPath(); ctx.moveTo(left,y(value)); ctx.lineTo(right,y(value)); ctx.stroke();
-    ctx.fillStyle = '#bdcde5';
+    ctx.fillStyle = '#a3b5ca';
     const label = tickLabel(value);
     if (label !== lastLabel) ctx.fillText(label,0,y(value)+4);
     lastLabel = label;
   }
-  ctx.strokeStyle = '#a8d2ff'; ctx.lineWidth = 2.5; ctx.beginPath();
+  ctx.strokeStyle = '#48d8ee'; ctx.lineWidth = 2.5; ctx.beginPath();
   points.forEach((row,index) => index ? ctx.lineTo(x(row),y(row.value)) : ctx.moveTo(x(row),y(row.value)));
   ctx.stroke();
-  ctx.fillStyle = '#a8d2ff';
+  ctx.fillStyle = '#48d8ee';
   for (const row of points) {
     ctx.beginPath(); ctx.arc(x(row),y(row.value),3.5,0,Math.PI*2); ctx.fill();
   }
   const shortDate = value => new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric'});
-  ctx.fillStyle = '#bdcde5';
+  ctx.fillStyle = '#a3b5ca';
   ctx.fillText(shortDate(dateStart),left,bottom+22);
   if (dateEnd !== dateStart) {
     const label = shortDate(dateEnd);
