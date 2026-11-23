@@ -291,7 +291,12 @@ function validateTasks(rows) {
         typeof task.text !== 'string' || !task.text.trim() || typeof task.done !== 'boolean' ||
         (task.reminder !== null && !validTaskDate(task.reminder))) throw Error('Invalid task');
     ids.add(task.id);
-    return {id:task.id,text:task.text.trim().slice(0,240),done:task.done,reminder:task.reminder};
+    const {doseId,completedAt} = task;
+    return {id:task.id,text:task.text.trim().slice(0,240),done:task.done,reminder:task.reminder,
+      ...(typeof doseId === 'string' && doseId ? {doseId} : {}),
+      ...(task.kind === 'water' ? {kind:'water'} : {}),
+      ...(task.done && typeof completedAt === 'string' && Number.isFinite(Date.parse(completedAt))
+        ? {completedAt:new Date(completedAt).toISOString()} : {})};
   });
 }
 
@@ -326,6 +331,7 @@ function validateDoses(rows) {
       throw Error('Invalid dose baseline');
     ids.add(id);
     return {id,key,brand:brand.trim().slice(0,100),amount,unit,labelAmount,labelVolume,labelRise,tankVolume,volumeUnit,
+      ...(typeof row.retestId === 'string' && row.retestId ? {retestId:row.retestId} : {}),
       date:new Date(date).toISOString(),baseline:baseline && {value:baseline.value,date:new Date(baseline.date).toISOString()}};
   });
 }
@@ -625,9 +631,10 @@ function taskList() {
   const completed = state.tasks.filter(task => task.done);
   const row = task => {
     return `<div class="task-row ${task.done ? 'task-complete' : ''}">
-      <label><input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''}><span class="task-check" aria-hidden="true"></span>
+      <label><input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''} ${task.doseId ? 'disabled' : ''}><span class="task-check" aria-hidden="true"></span>
       <span><span class="task-title">${esc(task.text)}</span>${taskReminder(task,today)}</span></label>
-      <button type="button" class="danger" data-delete-task="${esc(task.id)}" aria-label="Delete task ${esc(task.text)}">Delete</button>
+      <div class="actions">${task.doseId && !task.done ? `<button type="button" data-log-retest="${esc(task.id)}">Log retest</button>` : ''}
+      <button type="button" class="danger" data-delete-task="${esc(task.id)}" aria-label="Delete task ${esc(task.text)}">Delete</button></div>
     </div>`;
   };
   return `<div class="panel stack"><h2>Open tasks</h2>${open.map(row).join('') || '<p class="muted">No open tasks.</p>'}</div>
@@ -638,6 +645,7 @@ function taskView() {
   return `<section class="stack">
     <div><h1>Tasks</h1><p class="muted">${esc(state.name)}</p></div>
     <form id="task-form" class="panel stack">
+      <label>Task type<select name="kind"><option value="general">General</option><option value="water">Water change</option></select></label>
       <label>Task<textarea name="text" rows="2" required maxlength="240" placeholder="e.g. Test alkalinity"></textarea></label>
       <label class="check"><input type="checkbox" name="remind" aria-controls="task-reminder-date"> Set a reminder</label>
       <label id="task-reminder-date" hidden>Reminder date<input type="date" name="reminder" disabled></label>
@@ -687,14 +695,32 @@ function dosing() {
     <section class="panel history"><h2>Dose history</h2>${doses.map(dose => {
       const [,name,unit] = parameter(dose.key);
       const projection = dose.baseline ? `${doseNumber(dose.baseline.value)} → ${doseNumber(dose.baseline.value + doseIncrease(dose))} ${unit} estimated` : 'No baseline test';
+      const retest = doseRetest(dose);
+      const pending = state.tasks.find(task => task.doseId === dose.id && !task.done);
       return `<article><div><strong>${esc(dose.brand)}</strong><div>${name} · ${doseNumber(dose.amount)} ${dose.unit}</div>
-        <div class="muted">${projection} · ${dateText(dose.date)}</div></div>
-        <button class="danger" data-delete-dose="${esc(dose.id)}">Delete dose</button></article>`;
+        <div class="muted">${projection} · ${dateText(dose.date)}</div>
+        ${retest ? retestComparison(dose,retest,unit) : ''}</div>
+        <div class="actions">${pending ? '<button data-view="tasks">View retest task</button>' : !retest ?
+          `<button data-schedule-retest="${esc(dose.id)}">Schedule retest</button>` : ''}
+        <button class="danger" data-delete-dose="${esc(dose.id)}">Delete dose</button></div></article>`;
     }).join('') || '<p class="muted">Doses you log for this tank appear here.</p>'}</section>
   </section>`;
 }
 
 const doseNumber = value => value.toLocaleString(undefined,{maximumSignificantDigits:8});
+const doseRetest = dose => state.readings.find(row => row.id === dose.retestId && row.key === dose.key && row.date >= dose.date);
+
+function retestComparison(dose,retest,unit) {
+  const between = date => date > dose.date && date <= retest.date;
+  const doses = state.doses.filter(item => item.id !== dose.id && between(item.date)).length;
+  const changes = state.tasks.filter(task => task.kind === 'water' && task.done && between(task.completedAt)).length;
+  const events = [doses ? `${doses} additional ${doses === 1 ? 'dose' : 'doses'}` : '',
+    changes ? `${changes} water ${changes === 1 ? 'change' : 'changes'}` : ''].filter(Boolean);
+  const before = dose.baseline ? doseNumber(dose.baseline.value) + ' ' + unit : 'Unavailable';
+  const projected = dose.baseline ? doseNumber(dose.baseline.value + doseIncrease(dose)) + ' ' + unit : 'Unavailable';
+  return `<p>Before <strong>${before}</strong> · Projected <strong>${projected}</strong> · Measured <strong>${doseNumber(retest.value)} ${unit}</strong></p>
+    ${events.length ? `<p class="muted">Also logged before retest: ${events.join(' and ')}.</p>` : ''}`;
+}
 const doseProduct = name => DOSE_PRODUCTS.find(product => product.name.toLowerCase() === name.trim().toLowerCase());
 const gallons = (volume,unit) => unit === 'L' ? volume / LITERS_PER_US_GALLON : volume;
 const productVolume = (product,unit) => unit === 'L' ? product.liters : gallons(product.liters,'L');
@@ -1141,6 +1167,82 @@ function enablePhotoScan() {
   }
 }
 
+function scheduleRetest(dose) {
+  const [,name] = parameter(dose.key);
+  const tank = fleet.active;
+  form.innerHTML = `<h2 id="entry-title">Schedule ${name.toLowerCase()} retest</h2>
+    <label>Reminder date<input type="date" name="reminder" required min="${localDate(Date.now()).slice(0,10)}"></label>
+    <p id="entry-error" role="alert"></p>
+    <div class="actions"><button class="primary">Schedule retest</button><button type="button" id="cancel">Cancel</button></div>`;
+  form.onsubmit = event => {
+    event.preventDefault();
+    const reminder = new FormData(form).get('reminder');
+    if (!validTaskDate(reminder)) return;
+    const error = form.querySelector('#entry-error');
+    if (fleet.active !== tank || !state.doses.some(item => item.id === dose.id) ||
+        state.tasks.some(task => task.doseId === dose.id && !task.done)) {
+      error.textContent = 'This dose already has a retest task or is no longer available.';
+      return;
+    }
+    try {
+      const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
+      save({...state,tasks:[...state.tasks,{id,text:'Retest '+name.toLowerCase(),reminder,done:false,doseId:dose.id}]});
+      dialog.close();
+      render();
+      main.querySelector('#dose-message').textContent = 'Retest scheduled in Tasks.';
+    } catch { error.textContent = 'Could not schedule the retest.'; }
+  };
+  dialog.setAttribute('aria-labelledby','entry-title');
+  form.querySelector('#cancel').onclick = () => dialog.close();
+  dialog.showModal();
+}
+
+function logDoseRetest(task) {
+  const dose = state.doses.find(item => item.id === task.doseId);
+  if (!dose || task.done) return;
+  const tank = fleet.active;
+  const [,name,unit] = parameter(dose.key);
+  const openedAt = new Date();
+  const initialDate = localDate(openedAt);
+  form.innerHTML = `<h2 id="entry-title">Log ${name.toLowerCase()} retest</h2>
+    <p class="muted">${esc(dose.brand)} · Dose logged ${dateText(dose.date)}</p>
+    <label>Test date and time<input type="datetime-local" name="date" required value="${initialDate}"></label>
+    <label>${name} (${unit})<input name="reading" type="number" step="any" min="0" required></label>
+    <label>Notes<textarea name="note" rows="2" maxlength="1000"></textarea></label>
+    <p id="entry-error" role="alert"></p>
+    <div class="actions"><button class="primary">Save retest</button><button type="button" id="cancel">Cancel</button></div>`;
+  form.onsubmit = event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const testedAt = data.get('date') === initialDate ? openedAt : new Date(data.get('date'));
+    const value = Number(data.get('reading'));
+    const error = form.querySelector('#entry-error');
+    if (!Number.isFinite(testedAt.getTime()) || testedAt.getTime() < Date.parse(dose.date)) {
+      error.textContent = 'Choose a test time at or after the dose.';
+      return;
+    }
+    if (data.get('reading') === '' || !Number.isFinite(value) || value < 0) return;
+    if (fleet.active !== tank || !state.doses.some(item => item.id === dose.id) ||
+        !state.tasks.some(item => item.id === task.id && !item.done)) {
+      error.textContent = 'This retest task is no longer available.';
+      return;
+    }
+    try {
+      const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
+      const reading = {id,key:dose.key,value,date:testedAt.toISOString(),note:data.get('note').trim()};
+      save({...state,readings:[...state.readings,reading],
+        doses:state.doses.map(item => item.id === dose.id ? {...item,retestId:id} : item),
+        tasks:state.tasks.map(item => item.id === task.id ? {...item,done:true} : item)});
+      dialog.close();
+      render();
+      main.querySelector('#task-message').innerHTML = 'Retest saved to History. <button type="button" data-view="dosing">View dose comparison</button>';
+    } catch { error.textContent = 'Could not save the retest.'; }
+  };
+  dialog.setAttribute('aria-labelledby','entry-title');
+  form.querySelector('#cancel').onclick = () => dialog.close();
+  dialog.showModal();
+}
+
 function showEntry(key,row) {
   const choices = PARAMETERS.map(([id]) => parameter(id));
   const field = ([id,name,unit]) => `<label>${name}${unit ? ' ('+unit+')' : ''}<input type="number" step="any" name="${id}"></label>`;
@@ -1277,9 +1379,19 @@ document.addEventListener('click',event => {
     try { save({...state,readings:state.readings.filter(item => item.id !== button.dataset.delete)}); render(); }
     catch { alert('Could not save the change in this browser.'); }
   }
-  if (button.dataset.deleteDose && confirm('Delete this dose?')) {
+  if (button.dataset.scheduleRetest) {
+    const dose = state.doses.find(item => item.id === button.dataset.scheduleRetest);
+    if (dose) scheduleRetest(dose);
+  }
+  if (button.dataset.logRetest) {
+    const task = state.tasks.find(item => item.id === button.dataset.logRetest);
+    if (task) logDoseRetest(task);
+  }
+  if (button.dataset.deleteDose && confirm('Delete this dose and any open retest task for it?')) {
     try {
-      save({...state,doses:state.doses.filter(dose => dose.id !== button.dataset.deleteDose)});
+      const id = button.dataset.deleteDose;
+      save({...state,doses:state.doses.filter(dose => dose.id !== id),
+        tasks:state.tasks.filter(task => task.doseId !== id || task.done)});
       render();
       main.querySelector('#dose-message').textContent = 'Dose deleted.';
     } catch { alert('Could not delete this dose.'); }
@@ -1342,7 +1454,8 @@ main.addEventListener('submit',event => {
     }
     const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
     try {
-      save({...state,tasks:[...state.tasks,{id,text:text.slice(0,240),reminder,done:false}]});
+      const kind = data.get('kind') === 'water' ? 'water' : 'general';
+      save({...state,tasks:[...state.tasks,{id,text:text.slice(0,240),reminder,done:false,kind}]});
       render();
       main.querySelector('#task-message').textContent = 'Task added.';
       main.querySelector('#task-form textarea')?.focus();
@@ -1468,6 +1581,12 @@ main.addEventListener('submit',event => {
 
 main.addEventListener('change',async event => {
   const control = event.target;
+  if (control.form?.id === 'task-form' && control.name === 'kind') {
+    const text = control.form.elements.namedItem('text');
+    if (control.value === 'water' && !text.value.trim()) text.value = 'Water change';
+    if (control.value === 'general' && text.value === 'Water change') text.value = '';
+    return;
+  }
   if (control.form?.id === 'task-form' && control.name === 'remind') {
     const reminder = control.form.elements.namedItem('reminder');
     main.querySelector('#task-reminder-date').hidden = !control.checked;
@@ -1478,10 +1597,11 @@ main.addEventListener('change',async event => {
   if (control.dataset?.task) {
     const id = control.dataset.task;
     const task = state.tasks.find(item => item.id === id);
-    if (!task) return;
+    if (!task || task.doseId) return;
     const message = main.querySelector('#task-message');
     try {
-      save({...state,tasks:state.tasks.map(item => item.id === id ? {...item,done:control.checked} : item)});
+      save({...state,tasks:state.tasks.map(item => item.id === id ? {...item,done:control.checked,
+        ...(item.kind === 'water' ? {completedAt:control.checked ? new Date().toISOString() : null} : {})} : item)});
       main.querySelector('#task-list').innerHTML = taskList();
       main.querySelector('[data-task="' + CSS.escape(id) + '"]')?.focus();
       message.textContent = control.checked ? 'Task completed.' : 'Task reopened.';
