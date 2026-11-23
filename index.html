@@ -118,8 +118,12 @@ input[data-scanned]{border-color:#48d8ee}
 .dose-legend{margin:0;color:var(--muted)}
 #dose-suggestion{border-top:1px solid var(--line);padding-top:14px}
 .task-row{display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--line);padding-block:10px}
-.task-row label{display:flex;gap:12px;flex:1;min-width:0;align-items:flex-start;cursor:pointer}
-.task-row input{accent-color:var(--teal);margin-top:5px}
+.task-row label{position:relative;display:flex;gap:12px;flex:1;min-width:0;align-items:flex-start;cursor:pointer}
+.task-row input{position:absolute;inset:0 auto auto 0;opacity:0;width:22px;height:22px;margin:0}
+.task-check{display:grid;place-items:center;flex:none;width:22px;height:22px;border-radius:5px;color:#8296ad}
+.task-check::before{content:"";width:6px;height:11px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
+.task-row input:checked+.task-check{color:#63edb1;background:#193c35}
+.task-row input:focus-visible+.task-check{outline:2px solid var(--teal);outline-offset:2px}
 .task-row span{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
 .task-row small{display:block}
 .task-due{color:#f7c754}
@@ -596,7 +600,7 @@ function taskList() {
     const due = taskIsDue(task,today);
     const prefix = task.done ? 'Reminder was' : task.reminder < today ? 'Overdue' : due ? 'Due today' : 'Reminder';
     return `<div class="task-row ${task.done ? 'task-complete' : ''}">
-      <label><input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''}>
+      <label><input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''}><span class="task-check" aria-hidden="true"></span>
       <span><span class="task-title">${esc(task.text)}</span>${task.reminder ? `<small class="${due ? 'task-due' : 'muted'}">${prefix} · <time datetime="${task.reminder}">${new Date(task.reminder+'T12:00:00').toLocaleDateString(undefined,{dateStyle:'medium'})}</time></small>` : ''}</span></label>
       <button type="button" class="danger" data-delete-task="${esc(task.id)}" aria-label="Delete task ${esc(task.text)}">Delete</button>
     </div>`;
