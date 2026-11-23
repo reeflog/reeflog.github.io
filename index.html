@@ -219,6 +219,10 @@ input[data-scanned]{border-color:#48d8ee}
 .tank-edit[open]>summary,.tank-add[open]>summary{margin-bottom:12px}
 .tank-edit .tank-volume{border:0;padding:0;margin:0}
 .chart-summary{border-top:1px solid var(--line);padding-top:12px}
+.chart-wrap{position:relative;min-width:0}
+.chart-tooltip{position:absolute;z-index:1;transform:translate(-50%,-100%);pointer-events:none;
+  background:#0c1521;border:1px solid #486477;border-radius:8px;padding:6px 9px;text-align:center;white-space:nowrap;font-size:.8rem}
+.chart-tooltip strong,.chart-tooltip span{display:block}
 .history>h2{margin-bottom:8px}
 @media(max-width:700px){
   .task-layout{grid-template-columns:1fr}
@@ -1073,17 +1077,27 @@ function historyView() {
   return `<section class="stack"><div class="workspace-heading"><div class="page-heading"><h1>History</h1><p class="muted">${esc(state.name)}</p></div><button class="primary" data-add="${key}">Add water test</button></div>
     <div class="panel stack"><div class="workspace-toolbar"><label>Parameter<select id="history-filter">${PARAMETERS.map(([id,label]) => `<option value="${id}" ${id===key?'selected':''}>${label}</option>`).join('')}</select></label>
     <p class="muted">${range(displayTarget(key,config(key)),unit)}${readings.length ? ` · ${Math.min(readings.length,60)} plotted` : ''}</p></div>
-    ${readings.length ? `<canvas class="chart" id="chart" role="img" aria-label="${name} trend. Values are listed below."></canvas>
+    ${readings.length ? `<div class="chart-wrap"><canvas class="chart" id="chart" tabindex="0" role="img" aria-label="${name} trend. Hover, tap a dot, or use arrow keys to inspect readings."></canvas><div class="chart-tooltip" id="chart-tooltip" role="status" hidden></div></div>
     ` : ''}
     <div class="chart-summary"><h3>Stability trend</h3>${trend ? trendSummary(trend,unit,true) : '<p class="muted">Available after three separate tests.</p>'}</div></div></section>
     <section class="panel history"><h2>${name} readings</h2>${readings.map(row => `<article><div><strong>${format(displayParameterValue(key,row.value))} ${unit}</strong><div class="muted">${dateText(row.date)}</div>
     ${row.note ? `<p class="note">${esc(row.note)}</p>` : ''}</div><div class="actions"><button data-edit="${esc(row.id)}">Edit</button><button class="danger" data-delete="${esc(row.id)}">Delete</button></div></article>`).join('') || '<p class="muted">No readings yet.</p>'}</section>`;
 }
 
+function chartTicks(min,max,gravity) {
+  const spread = max-min;
+  const minimum = gravity ? .001 : .05;
+  const step = Math.max(minimum,5*10**Math.ceil(Math.log10(spread/30)));
+  const first = Math.floor(min/step+1e-9);
+  const last = Math.max(first+2,Math.ceil(max/step-1e-9));
+  return Array.from({length:last-first+1},(_,i) => (first+i)*step);
+}
+
 function draw() {
   const canvas = document.querySelector('#chart');
   if (!canvas) return;
-  const chartValue = value => selected === 'salt' && salinityUnit() === 'SG' && value !== null
+  const gravity = selected === 'salt' && salinityUnit() === 'SG';
+  const chartValue = value => gravity && value !== null
     ? salinityToGravity(value) : value;
   const points = records(selected).slice(0,60).reverse().map(row => ({...row,value:chartValue(row.value)}));
   const target = config(selected);
@@ -1091,7 +1105,6 @@ function draw() {
   const series = points.map(row => row.value);
   const min = Math.min(...series,...[low,high].filter(value => value !== null));
   const max = Math.max(...series,...[low,high].filter(value => value !== null));
-  const pad = (max-min)*.12 || (selected === 'salt' && salinityUnit() === 'SG' ? .0001 : Math.max(Math.abs(max)*.04,.01));
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const {width,height} = canvas.getBoundingClientRect();
@@ -1101,11 +1114,11 @@ function draw() {
   ctx.scale(scale,scale);
   const top = 12, bottom = height-32;
   ctx.font = '12px system-ui';
-  const ticks = Array.from({length:5},(_,i) => min-pad+i*(max-min+2*pad)/4);
-  const tickLabel = value => selected === 'salt' ? format(Number(value.toFixed(3))) : format(Number(value.toPrecision(6)));
+  const ticks = chartTicks(min,max,gravity);
+  const tickLabel = value => value.toLocaleString(undefined,{minimumFractionDigits:gravity ? 3 : 2,maximumFractionDigits:gravity ? 3 : 2});
   const left = Math.max(45,...ticks.map(value => ctx.measureText(tickLabel(value)).width+10));
   const right = width-12;
-  const y = value => bottom-(value-min+pad)/(max-min+2*pad)*(bottom-top);
+  const y = value => bottom-(value-ticks[0])/(ticks.at(-1)-ticks[0])*(bottom-top);
   const dateStart = Date.parse(points[0].date);
   const dateEnd = Date.parse(points.at(-1).date);
   const x = row => dateEnd === dateStart ? (left+right)/2 : left+(Date.parse(row.date)-dateStart)/(dateEnd-dateStart)*(right-left);
@@ -1114,14 +1127,11 @@ function draw() {
     ctx.fillStyle = '#193c3e';
     ctx.fillRect(left,start,right-left,(low === null ? bottom : y(low))-start);
   }
-  let lastLabel;
   for (const value of ticks) {
     ctx.strokeStyle = '#32445a';
     ctx.beginPath(); ctx.moveTo(left,y(value)); ctx.lineTo(right,y(value)); ctx.stroke();
     ctx.fillStyle = '#a3b5ca';
-    const label = tickLabel(value);
-    if (label !== lastLabel) ctx.fillText(label,0,y(value)+4);
-    lastLabel = label;
+    ctx.fillText(tickLabel(value),0,y(value)+4);
   }
   ctx.strokeStyle = '#48d8ee'; ctx.lineWidth = 2.5; ctx.beginPath();
   points.forEach((row,index) => index ? ctx.lineTo(x(row),y(row.value)) : ctx.moveTo(x(row),y(row.value)));
@@ -1137,6 +1147,40 @@ function draw() {
     const label = shortDate(dateEnd);
     ctx.fillText(label,right-ctx.measureText(label).width,bottom+22);
   }
+  const tooltip = document.querySelector('#chart-tooltip');
+  const [,name,unit] = parameter(selected);
+  let activeIndex = -1;
+  const showPoint = index => {
+    activeIndex = index;
+    tooltip.hidden = index < 0;
+    if (index < 0) return;
+    const row = points[index];
+    tooltip.innerHTML = `<strong>${name} · ${tickLabel(row.value)}${unit ? ' ' + unit : ''}</strong><span>${dateText(row.date)}</span>`;
+    const half = tooltip.offsetWidth/2;
+    tooltip.style.left = Math.max(half,Math.min(width-half,x(row))) + 'px';
+    tooltip.style.top = canvas.offsetTop + Math.max(tooltip.offsetHeight+6,y(row)-9) + 'px';
+  };
+  showPoint(-1);
+  const inspectPointer = event => {
+    const rect = canvas.getBoundingClientRect();
+    let closest = -1, distance = 19;
+    points.forEach((row,index) => {
+      const candidate = Math.hypot(event.clientX-rect.left-x(row),event.clientY-rect.top-y(row.value));
+      if (candidate <= distance) { closest = index; distance = candidate; }
+    });
+    if (closest !== activeIndex) showPoint(closest);
+  };
+  canvas.onpointermove = inspectPointer;
+  canvas.onpointerdown = inspectPointer;
+  canvas.onpointerleave = event => { if (event.pointerType !== 'touch') showPoint(-1); };
+  canvas.onblur = () => showPoint(-1);
+  canvas.onkeydown = event => {
+    if (event.key === 'Escape') showPoint(-1);
+    if (!['ArrowLeft','ArrowRight'].includes(event.key)) return;
+    event.preventDefault();
+    const next = activeIndex < 0 ? points.length-1 : activeIndex+(event.key === 'ArrowLeft' ? -1 : 1);
+    showPoint(Math.max(0,Math.min(points.length-1,next)));
+  };
 }
 
 function urgentText({urgentLow,urgentHigh}) {
