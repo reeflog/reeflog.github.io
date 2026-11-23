@@ -144,7 +144,10 @@ input[data-scanned]{border-color:#48d8ee}
 .outstanding-tasks li+li{margin-top:.5rem}
 .outstanding-tasks small{display:block}
 .task-complete .task-title{color:var(--muted);text-decoration:line-through}
-#task-reminder-date[hidden],#water-change-repeat[hidden],#task-message:empty{display:none}
+#task-reminder-date[hidden],#task-message:empty{display:none}
+.water-change-panel .workspace-toolbar{align-items:center}
+.water-change-panel details>summary{cursor:pointer}
+[data-water-interval][aria-pressed="true"]{border-color:var(--teal);color:var(--teal)}
 @media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
 .nav-icon{display:none}
 .nav-drop{width:10px;height:13px;border:1.5px solid currentColor;border-radius:70% 45% 70% 70%;transform:rotate(35deg)}
@@ -803,18 +806,25 @@ function taskReminder(task,today) {
   return `<small class="${due ? 'task-due' : 'muted'}">${prefix} · <time datetime="${task.reminder}">${date}</time></small>`;
 }
 
-function completeTask(tasks,task,done,now = new Date()) {
-  const water = task.kind === 'water';
-  const updated = tasks.map(item => item.id === task.id ? {...item,done,
-    ...(water ? {completedAt:done ? now.toISOString() : null} : {})} : item);
-  if (!water || !task.repeatDays || task.done === done) return updated;
-  if (!done) return updated.filter(item => item.repeatFrom !== task.id || item.done);
-  if (updated.some(item => item.repeatFrom === task.id)) return updated;
-  const due = new Date(localDate(now).slice(0,10));
-  due.setUTCDate(due.getUTCDate()+task.repeatDays);
-  const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
-  return [...updated,{id,text:task.text,reminder:due.toISOString().slice(0,10),done:false,
-    kind:'water',repeatDays:task.repeatDays,repeatFrom:task.id}];
+function waterChangeDate(date,days) {
+  const due = new Date(localDate(date).slice(0,10));
+  due.setUTCDate(due.getUTCDate()+days);
+  return due.toISOString().slice(0,10);
+}
+
+function waterChangePanel() {
+  const upcoming = openTasks().filter(task => task.kind === 'water');
+  const completed = state.tasks.filter(task => task.kind === 'water' && task.done && task.completedAt)
+    .sort((a,b) => b.completedAt.localeCompare(a.completedAt));
+  const today = localDate(Date.now()).slice(0,10);
+  return `<div class="workspace-toolbar">
+    <div><h2>Water changes</h2><p class="muted">${completed.length ? 'Last change · ' + dateText(completed[0].completedAt) : 'No water changes logged'}</p></div>
+    <button type="button" class="primary" data-log-water-change>Log water change</button>
+  </div>
+  ${upcoming.map(task => `<div class="actions"><span>Next water change</span>${taskReminder(task,today) || '<small class="muted">No date set</small>'}
+    <button type="button" data-delete-task="${esc(task.id)}">Remove reminder</button></div>`).join('')}
+  ${completed.length > 1 ? `<details><summary>Recent changes</summary><ul>${completed.slice(0,10).map(task =>
+    `<li><time datetime="${task.completedAt}">${dateText(task.completedAt)}</time></li>`).join('')}</ul></details>` : ''}`;
 }
 
 function outstandingTasks() {
@@ -833,8 +843,8 @@ function outstandingTasks() {
 
 function taskList() {
   const today = localDate(Date.now()).slice(0,10);
-  const open = openTasks();
-  const completed = state.tasks.filter(task => task.done);
+  const open = openTasks().filter(task => task.kind !== 'water');
+  const completed = state.tasks.filter(task => task.done && task.kind !== 'water');
   const row = task => {
     return `<div class="task-row ${task.done ? 'task-complete' : ''}">
       <label><input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''} ${task.doseId ? 'disabled' : ''}><span class="task-check" aria-hidden="true"></span>
@@ -851,15 +861,11 @@ function taskView() {
   return `<section class="stack">
     <div class="page-heading"><h1>Tasks</h1><p class="muted">${esc(state.name)}</p></div>
     <p id="task-message" role="status"></p>
+    <section id="water-changes" class="panel stack water-change-panel">${waterChangePanel()}</section>
     <div class="task-layout">
     <details class="panel task-compose" ${state.tasks.length ? '' : 'open'}><summary>Add a task</summary>
     <form id="task-form" class="stack">
-      <label>Task type<select name="kind"><option value="general">General</option><option value="water">Water change</option></select></label>
       <label>Task<textarea name="text" rows="2" required maxlength="240" placeholder="e.g. Test alkalinity"></textarea></label>
-      <label id="water-change-repeat" hidden>Repeat<select name="repeatDays" disabled>
-        <option value="">Never</option><option value="7">Every 7 days</option><option value="14">Every 14 days</option>
-        <option value="21">Every 21 days</option><option value="30">Every 30 days</option>
-      </select><span class="muted">The next reminder is based on the day you finish.</span></label>
       <label class="check"><input type="checkbox" name="remind" aria-controls="task-reminder-date"> Set a reminder</label>
       <label id="task-reminder-date" hidden>Reminder date<input type="date" name="reminder" disabled></label>
       <p class="muted">Reminders appear in REEFLOG.</p>
@@ -1400,6 +1406,67 @@ function enablePhotoScan() {
   }
 }
 
+function logWaterChange() {
+  const tankId = fleet.active;
+  const planned = openTasks().find(task => task.kind === 'water');
+  const now = new Date();
+  const id = planned?.id ?? (crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2));
+  const completed = {...(planned ?? {id,text:'Water change',kind:'water',reminder:null}),done:true,completedAt:now.toISOString()};
+  try {
+    save({...state,tasks:planned ? state.tasks.map(task => task.id === id ? completed : task) : [...state.tasks,completed]});
+    render();
+    main.querySelector('#task-message').textContent = 'Water change logged.';
+  } catch {
+    main.querySelector('#task-message').textContent = 'Could not log the water change.';
+    return;
+  }
+  const earliest = waterChangeDate(now,1);
+  form.innerHTML = `<h2 id="entry-title">Next water change</h2>
+    <p class="muted">Your water change was logged. When should we remind you again?</p>
+    <div class="actions">${[7,14,21,30].map(days => `<button type="button" data-water-interval="${days}" aria-pressed="false">${days} days</button>`).join('')}</div>
+    <label>Reminder date<input name="reminder" type="date" min="${earliest}" required></label>
+    <p id="entry-error" role="alert"></p>
+    <div class="actions"><button class="primary">Set reminder</button><button type="button" id="cancel">No reminder</button></div>`;
+  const date = form.elements.namedItem('reminder');
+  const presets = form.querySelectorAll('[data-water-interval]');
+  for (const button of presets) button.onclick = () => {
+    date.value = waterChangeDate(now,Number(button.dataset.waterInterval));
+    date.dispatchEvent(new Event('input'));
+  };
+  date.oninput = () => {
+    for (const button of presets) button.setAttribute('aria-pressed',
+      String(date.value === waterChangeDate(now,Number(button.dataset.waterInterval))));
+  };
+  if (planned?.repeatDays) {
+    date.value = waterChangeDate(now,planned.repeatDays);
+    date.oninput();
+  }
+  form.onsubmit = event => {
+    event.preventDefault();
+    const error = form.querySelector('#entry-error');
+    if (!validTaskDate(date.value) || date.value < earliest) return;
+    if (fleet.active !== tankId || !state.tasks.some(task => task.id === id && task.done)) {
+      error.textContent = 'The tank or water-change entry has changed.';
+      return;
+    }
+    const reminderId = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
+    const repeatDays = [7,14,21,30].find(days => waterChangeDate(now,days) === date.value);
+    try {
+      save({...state,tasks:[...state.tasks,{id:reminderId,text:'Water change',kind:'water',done:false,reminder:date.value,repeatDays}]});
+      dialog.close();
+      render();
+      main.querySelector('#task-message').textContent = 'Next water change scheduled.';
+      main.querySelector('[data-log-water-change]')?.focus();
+    } catch { error.textContent = 'Could not save the reminder.'; }
+  };
+  form.querySelector('#cancel').onclick = () => {
+    dialog.close();
+    main.querySelector('[data-log-water-change]')?.focus();
+  };
+  dialog.setAttribute('aria-labelledby','entry-title');
+  dialog.showModal();
+}
+
 function scheduleRetest(dose) {
   const [,name] = parameter(dose.key);
   const tank = fleet.active;
@@ -1628,6 +1695,7 @@ document.addEventListener('click',event => {
     const dose = state.doses.find(item => item.id === button.dataset.scheduleRetest);
     if (dose) scheduleRetest(dose);
   }
+  if (Object.hasOwn(button.dataset,'logWaterChange')) logWaterChange();
   if (button.dataset.logRetest) {
     const task = state.tasks.find(item => item.id === button.dataset.logRetest);
     if (task) logDoseRetest(task);
@@ -1646,6 +1714,8 @@ document.addEventListener('click',event => {
     try {
       save({...state,tasks:state.tasks.filter(task => task.id !== button.dataset.deleteTask)});
       main.querySelector('#task-list').innerHTML = taskList();
+      const water = main.querySelector('#water-changes');
+      if (water) water.innerHTML = waterChangePanel();
       const next = main.querySelector('[data-delete-task]') ?? main.querySelector('.task-compose summary');
       next?.focus();
       message.textContent = 'Task deleted.';
@@ -1699,10 +1769,7 @@ main.addEventListener('submit',event => {
     }
     const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
     try {
-      const kind = data.get('kind') === 'water' ? 'water' : 'general';
-      const repeatDays = kind === 'water' ? waterChangeInterval(data.get('repeatDays')) : null;
-      save({...state,tasks:[...state.tasks,{id,text:text.slice(0,240),reminder,done:false,kind,
-        ...(repeatDays ? {repeatDays} : {})}]});
+      save({...state,tasks:[...state.tasks,{id,text:text.slice(0,240),reminder,done:false}]});
       render();
       main.querySelector('#task-message').textContent = 'Task added.';
       main.querySelector('.task-compose summary')?.focus();
@@ -1840,15 +1907,6 @@ main.addEventListener('change',async event => {
     }
     return;
   }
-  if (control.form?.id === 'task-form' && control.name === 'kind') {
-    const text = control.form.elements.namedItem('text');
-    const repeating = control.value === 'water';
-    main.querySelector('#water-change-repeat').hidden = !repeating;
-    control.form.elements.namedItem('repeatDays').disabled = !repeating;
-    if (control.value === 'water' && !text.value.trim()) text.value = 'Water change';
-    if (control.value === 'general' && text.value === 'Water change') text.value = '';
-    return;
-  }
   if (control.form?.id === 'task-form' && control.name === 'remind') {
     const reminder = control.form.elements.namedItem('reminder');
     main.querySelector('#task-reminder-date').hidden = !control.checked;
@@ -1859,16 +1917,13 @@ main.addEventListener('change',async event => {
   if (control.dataset?.task) {
     const id = control.dataset.task;
     const task = state.tasks.find(item => item.id === id);
-    if (!task || task.doseId) return;
+    if (!task || task.doseId || task.kind === 'water') return;
     const message = main.querySelector('#task-message');
     try {
-      const tasks = completeTask(state.tasks,task,control.checked);
-      const scheduled = tasks.length > state.tasks.length;
-      save({...state,tasks});
+      save({...state,tasks:state.tasks.map(item => item.id === id ? {...item,done:control.checked} : item)});
       main.querySelector('#task-list').innerHTML = taskList();
       main.querySelector('[data-task="' + CSS.escape(id) + '"]')?.focus();
-      message.textContent = scheduled ? 'Water change completed. Next reminder scheduled.' :
-        control.checked ? 'Task completed.' : 'Task reopened.';
+      message.textContent = control.checked ? 'Task completed.' : 'Task reopened.';
     } catch {
       control.checked = task.done;
       message.textContent = 'Could not update the task.';
