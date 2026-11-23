@@ -147,7 +147,6 @@ input[data-scanned]{border-color:#48d8ee}
 #task-reminder-date[hidden],#task-message:empty{display:none}
 .water-change-panel .workspace-toolbar{align-items:center}
 .water-change-panel details>summary{cursor:pointer}
-[data-water-interval][aria-pressed="true"]{border-color:var(--teal);color:var(--teal)}
 @media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
 .nav-icon{display:none}
 .nav-drop{width:10px;height:13px;border:1.5px solid currentColor;border-radius:70% 45% 70% 70%;transform:rotate(35deg)}
@@ -187,8 +186,6 @@ input[data-scanned]{border-color:#48d8ee}
 #dose-message:empty{display:none}
 .page-heading{display:grid;gap:5px}
 .page-heading h1{font-size:clamp(1.9rem,5vw,2.8rem)}
-.task-compose>summary{cursor:pointer;font-weight:700}
-.task-compose[open]>summary{margin-bottom:12px}
 .parameter-row{border-inline-start:4px solid #536278}
 .parameter-row[data-status="green"]{border-inline-start-color:#4dd99b}
 .parameter-row[data-status="yellow"]{border-inline-start-color:#f7c754}
@@ -866,14 +863,13 @@ function taskView() {
     <div id="task-list">${taskList()}</div>
     <div class="task-layout">
     <section id="water-changes" class="panel stack water-change-panel">${waterChangePanel()}</section>
-    <details class="panel task-compose" ${state.tasks.length ? '' : 'open'}><summary>Add a task</summary>
-    <form id="task-form" class="stack">
+    <form id="task-form" class="panel stack task-compose"><h2>Add a task</h2>
       <label>Task<textarea name="text" rows="2" required maxlength="240" placeholder="e.g. Test alkalinity"></textarea></label>
       <label class="check"><input type="checkbox" name="remind" aria-controls="task-reminder-date"> Set a reminder</label>
       <label id="task-reminder-date" hidden>Reminder date<input type="date" name="reminder" disabled></label>
       <p class="muted">Reminders appear in REEFLOG.</p>
       <div><button class="primary">Add task</button></div>
-    </form></details>
+    </form>
     </div>
     <div id="completed-tasks">${taskList(true)}</div>
   </section>`;
@@ -1423,39 +1419,24 @@ function logWaterChange() {
     main.querySelector('#task-message').textContent = 'Could not log the water change.';
     return;
   }
-  const earliest = waterChangeDate(now,1);
   form.innerHTML = `<h2 id="entry-title">Next water change</h2>
     <p class="muted">Your water change was logged. When should we remind you again?</p>
-    <div class="actions">${[7,14,21,30].map(days => `<button type="button" data-water-interval="${days}" aria-pressed="false">${days} days</button>`).join('')}</div>
-    <label>Reminder date<input name="reminder" type="date" min="${earliest}" required></label>
+    <div class="actions">${[7,14,21,30].map(days => `<button type="submit" name="interval" value="${days}" class="${days === planned?.repeatDays ? 'primary' : ''}">${days} days</button>`).join('')}</div>
     <p id="entry-error" role="alert"></p>
-    <div class="actions"><button class="primary">Set reminder</button><button type="button" id="cancel">No reminder</button></div>`;
-  const date = form.elements.namedItem('reminder');
-  const presets = form.querySelectorAll('[data-water-interval]');
-  for (const button of presets) button.onclick = () => {
-    date.value = waterChangeDate(now,Number(button.dataset.waterInterval));
-    date.dispatchEvent(new Event('input'));
-  };
-  date.oninput = () => {
-    for (const button of presets) button.setAttribute('aria-pressed',
-      String(date.value === waterChangeDate(now,Number(button.dataset.waterInterval))));
-  };
-  if (planned?.repeatDays) {
-    date.value = waterChangeDate(now,planned.repeatDays);
-    date.oninput();
-  }
+    <div><button type="button" id="cancel">No reminder</button></div>`;
   form.onsubmit = event => {
     event.preventDefault();
+    const repeatDays = waterChangeInterval(event.submitter?.value);
+    if (!repeatDays) return;
     const error = form.querySelector('#entry-error');
-    if (!validTaskDate(date.value) || date.value < earliest) return;
     if (fleet.active !== tankId || !state.tasks.some(task => task.id === id && task.done)) {
       error.textContent = 'The tank or water-change entry has changed.';
       return;
     }
     const reminderId = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
-    const repeatDays = [7,14,21,30].find(days => waterChangeDate(now,days) === date.value);
+    const reminder = waterChangeDate(now,repeatDays);
     try {
-      save({...state,tasks:[...state.tasks,{id:reminderId,text:'Water change',kind:'water',done:false,reminder:date.value,repeatDays}]});
+      save({...state,tasks:[...state.tasks,{id:reminderId,text:'Water change',kind:'water',done:false,reminder,repeatDays}]});
       dialog.close();
       render();
       main.querySelector('#task-message').textContent = 'Next water change scheduled.';
@@ -1719,7 +1700,7 @@ document.addEventListener('click',event => {
       refreshTaskLists();
       const water = main.querySelector('#water-changes');
       if (water) water.innerHTML = waterChangePanel();
-      const next = main.querySelector('[data-delete-task]') ?? main.querySelector('.task-compose summary');
+      const next = main.querySelector('[data-delete-task]') ?? main.querySelector('#task-form textarea');
       next?.focus();
       message.textContent = 'Task deleted.';
     } catch { message.textContent = 'Could not delete the task.'; }
@@ -1775,7 +1756,7 @@ main.addEventListener('submit',event => {
       save({...state,tasks:[...state.tasks,{id,text:text.slice(0,240),reminder,done:false}]});
       render();
       main.querySelector('#task-message').textContent = 'Task added.';
-      main.querySelector('.task-compose summary')?.focus();
+      main.querySelector('#task-form textarea')?.focus();
     } catch { message.textContent = 'Could not save the task.'; }
     return;
   }
