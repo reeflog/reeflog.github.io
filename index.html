@@ -127,6 +127,9 @@ input[data-scanned]{border-color:#48d8ee}
 .task-row span{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
 .task-row small{display:block}
 .task-due{color:#f7c754}
+.outstanding-tasks{margin:0;padding-inline-start:1.35rem;overflow-wrap:anywhere}
+.outstanding-tasks li+li{margin-top:.5rem}
+.outstanding-tasks small{display:block}
 .task-complete .task-title{color:var(--muted);text-decoration:line-through}
 #task-reminder-date[hidden],#task-message:empty{display:none}
 @media(max-width:700px){.dose-layout{grid-template-columns:1fr}}
@@ -563,7 +566,6 @@ function nextStep(item) {
 }
 
 function overview() {
-  const dueCount = state.tasks.filter(task => taskIsDue(task)).length;
   const items = active().map(([key,name,unit]) => {
     const setting = config(key);
     const reading = records(key)[0];
@@ -573,7 +575,7 @@ function overview() {
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
   const count = color => items.filter(item => item.color === color).length;
   return `<section class="hero"><div><h1>${esc(state.name)}</h1><p>${CORAL_PROFILES[profileKey(state)].label}${profileKey(state) === 'fowlr' ? '' : ' reef'} · Water parameters</p></div><button class="primary" data-add>Add water test</button></section>
-  ${dueCount ? `<section class="panel actions"><span class="task-due">${dueCount} ${dueCount === 1 ? 'task' : 'tasks'} due</span><button data-view="tasks">Open Tasks</button></section>` : ''}
+  ${outstandingTasks()}
   <section aria-label="Reading summary" class="summary">
     ${[['green','Healthy'],['yellow','Needs attention'],['red','Fix immediately']].map(([color,label]) =>
       `<div><span class="dot ${color}" aria-hidden="true"></span><strong>${count(color)}</strong><span>${label}</span></div>`).join('')}
@@ -592,16 +594,39 @@ function taskIsDue(task,today = localDate(Date.now()).slice(0,10)) {
   return !task.done && task.reminder !== null && task.reminder <= today;
 }
 
+const openTasks = () => state.tasks.filter(task => !task.done)
+  .sort((a,b) => (a.reminder ?? '9999-12-31').localeCompare(b.reminder ?? '9999-12-31'));
+
+function taskReminder(task,today) {
+  if (!task.reminder) return '';
+  const due = taskIsDue(task,today);
+  const prefix = task.done ? 'Reminder was' : task.reminder < today ? 'Overdue' : due ? 'Due today' : 'Reminder';
+  const date = new Date(task.reminder+'T12:00:00').toLocaleDateString(undefined,{dateStyle:'medium'});
+  return `<small class="${due ? 'task-due' : 'muted'}">${prefix} · <time datetime="${task.reminder}">${date}</time></small>`;
+}
+
+function outstandingTasks() {
+  const open = openTasks();
+  if (!open.length) return '';
+  const today = localDate(Date.now()).slice(0,10);
+  const due = open.filter(task => taskIsDue(task,today)).length;
+  return `<section class="panel" aria-labelledby="outstanding-tasks-heading">
+    <div class="section-head"><div><h2 id="outstanding-tasks-heading">Outstanding tasks</h2>
+      ${due ? `<p class="task-due">${due} ${due === 1 ? 'task' : 'tasks'} due</p>` : ''}</div>
+      <button data-view="tasks">Open Tasks</button>
+    </div>
+    <ul class="outstanding-tasks">${open.map(task => `<li>${esc(task.text)}${taskReminder(task,today)}</li>`).join('')}</ul>
+  </section>`;
+}
+
 function taskList() {
   const today = localDate(Date.now()).slice(0,10);
-  const open = state.tasks.filter(task => !task.done).sort((a,b) => (a.reminder ?? '9999-12-31').localeCompare(b.reminder ?? '9999-12-31'));
+  const open = openTasks();
   const completed = state.tasks.filter(task => task.done);
   const row = task => {
-    const due = taskIsDue(task,today);
-    const prefix = task.done ? 'Reminder was' : task.reminder < today ? 'Overdue' : due ? 'Due today' : 'Reminder';
     return `<div class="task-row ${task.done ? 'task-complete' : ''}">
       <label><input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''}><span class="task-check" aria-hidden="true"></span>
-      <span><span class="task-title">${esc(task.text)}</span>${task.reminder ? `<small class="${due ? 'task-due' : 'muted'}">${prefix} · <time datetime="${task.reminder}">${new Date(task.reminder+'T12:00:00').toLocaleDateString(undefined,{dateStyle:'medium'})}</time></small>` : ''}</span></label>
+      <span><span class="task-title">${esc(task.text)}</span>${taskReminder(task,today)}</span></label>
       <button type="button" class="danger" data-delete-task="${esc(task.id)}" aria-label="Delete task ${esc(task.text)}">Delete</button>
     </div>`;
   };
