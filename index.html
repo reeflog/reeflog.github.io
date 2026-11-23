@@ -1085,6 +1085,7 @@ function historyView() {
 }
 
 const API_CHART_STEPS = {ca:20,po4:.25,alk:1,no3:5,no2:.25,nh3:.25,ph:.2};
+const CHART_DECIMALS = {ph:1,po4:1,no3:0,ca:0,mg:0};
 
 function chartTicks(min,max,key,gravity) {
   const spread = max-min;
@@ -1121,7 +1122,10 @@ function draw() {
   const top = 12, bottom = height-32;
   ctx.font = '12px system-ui';
   const ticks = chartTicks(min,max,selected,gravity);
-  const tickLabel = value => value.toLocaleString(undefined,{minimumFractionDigits:gravity ? 3 : 2,maximumFractionDigits:gravity ? 3 : 2});
+  const decimals = gravity ? 3 : CHART_DECIMALS[selected] ?? 2;
+  const tickLabel = value => value.toLocaleString(undefined,{
+    minimumFractionDigits:decimals,maximumFractionDigits:decimals,useGrouping:selected !== 'mg'
+  });
   const left = Math.max(45,...ticks.map(value => ctx.measureText(tickLabel(value)).width+10));
   const right = width-12;
   const y = value => bottom-(value-ticks[0])/(ticks.at(-1)-ticks[0])*(bottom-top);
