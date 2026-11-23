@@ -42,6 +42,8 @@ button,input,select,textarea{background:#141f30;color:var(--ink);border-color:#3
 .primary{background:#48d8ee;color:#06222c}
 .hero{position:relative;background:radial-gradient(ellipse at 93% 105%,#174e63 0%,transparent 65%),linear-gradient(120deg,#172738,#101727);border-color:#2a455a}
 .hero p{color:#b0c7da}
+.hero-actions{align-items:end}
+.hero-actions label{width:min(210px,100%)}
 .card,.panel,dialog{background:#121c2b;border-color:var(--line)}
 .card h3{color:#b9c9db}
 .pill{background:#273548;color:#d5e4f0}
@@ -583,7 +585,10 @@ function overview() {
   const order = ['red','yellow','green','gray'];
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
   const count = color => items.filter(item => item.color === color).length;
-  return `<section class="hero"><div><h1>${esc(state.name)}</h1><p>${CORAL_PROFILES[profileKey(state)].label}${profileKey(state) === 'fowlr' ? '' : ' reef'} · Water parameters</p></div><button class="primary" data-add>Add water test</button></section>
+  return `<section class="hero"><div><h1>${esc(state.name)}</h1><p>${CORAL_PROFILES[profileKey(state)].label}${profileKey(state) === 'fowlr' ? '' : ' reef'} · Water parameters</p></div>
+    <div class="actions hero-actions">${fleet.tanks.length > 1 ? `<label>Switch tank<select id="overview-tank">
+      ${fleet.tanks.map(tank => `<option value="${esc(tank.id)}" ${tank.id === fleet.active ? 'selected' : ''}>${esc(tank.log.name)}</option>`).join('')}
+      </select></label>` : ''}<button class="primary" data-add>Add water test</button></div></section>
   ${outstandingTasks()}
   <section aria-label="Reading summary" class="summary">
     ${[['green','Healthy'],['yellow','Needs attention'],['red','Fix immediately']].map(([color,label]) =>
@@ -1607,6 +1612,18 @@ main.addEventListener('submit',event => {
 
 main.addEventListener('change',async event => {
   const control = event.target;
+  if (control.id === 'overview-tank') {
+    const id = control.value;
+    if (id === fleet.active || !fleet.tanks.some(tank => tank.id === id)) return;
+    try {
+      activate({...fleet,active:id});
+      main.querySelector('#overview-tank')?.focus();
+    } catch {
+      control.value = fleet.active;
+      alert('Could not switch tanks. Try again.');
+    }
+    return;
+  }
   if (control.form?.id === 'task-form' && control.name === 'kind') {
     const text = control.form.elements.namedItem('text');
     if (control.value === 'water' && !text.value.trim()) text.value = 'Water change';
