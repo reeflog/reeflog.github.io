@@ -87,7 +87,7 @@ dialog::backdrop{background:#020611bf}
 @media(max-width:460px){.summary>div{padding:8px;column-gap:6px}.summary>div>span:last-child{width:100%;font-size:.78rem}.reading-grid{grid-template-columns:1fr}}
 .tank-actions{margin-top:7px;padding-top:9px;border-top:1px solid var(--line)}
 .tank-volume{border-top:1px solid var(--line);margin-top:7px;padding-top:12px}
-.tank-volume [role=status]:empty,.tank-volume [data-tank-age]:empty{display:none}
+.tank-volume [role=status]:empty{display:none}
 .danger{color:#ffadb7;border-color:#714052}
 .danger:hover{background:#422633}
 
@@ -206,6 +206,19 @@ input[data-scanned]{border-color:#48d8ee}
 .reference-panel>div{margin-top:12px}
 .account-panel{max-width:640px}
 .tank-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.tank-card{padding:18px;gap:14px}
+.tank-card[data-active="true"]{border-color:#397181;background:linear-gradient(145deg,#142b38,#121c2b 65%)}
+.tank-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.tank-card-header h2{font-size:1.27rem;overflow-wrap:anywhere}
+.tank-card-header .pill{white-space:nowrap}
+.tank-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
+.tank-facts div{padding:9px 11px;border-radius:9px;background:#0e1725;border:1px solid var(--line)}
+.tank-facts dt{color:var(--muted);font-size:.76rem}
+.tank-facts dd{margin:2px 0 0;font-size:.91rem;font-weight:650}
+.tank-edit{border-top:1px solid var(--line);padding-top:10px}
+.tank-edit>summary,.tank-add>summary{cursor:pointer;font-weight:700}
+.tank-edit[open]>summary,.tank-add[open]>summary{margin-bottom:12px}
+.tank-edit .tank-volume{border:0;padding:0;margin:0}
 .chart-summary{border-top:1px solid var(--line);padding-top:12px}
 .history>h2{margin-bottom:8px}
 @media(max-width:700px){
@@ -641,29 +654,53 @@ function readTankDetails(data) {
   return {waterVolume:readTankVolume(data),setupDate};
 }
 
-function tanks() {
-  return `<section class="stack"><div class="page-heading"><h1>Tanks</h1></div>
-    <div class="grid tank-grid">${fleet.tanks.map(tank => `<article class="card"><h3>${esc(tank.log.name)}</h3>
-      ${tank.id === fleet.active ? '<span class="pill good">Active tank</span>' :
-      `<button data-tank="${esc(tank.id)}">Switch to this tank</button>`}
+function tankFacts(log) {
+  const volume = log.waterVolume;
+  return `<div><dt>Water volume</dt><dd>${volume ? doseNumber(volume.amount) + ' ' + volume.unit : 'Unset'}</dd></div>
+    <div><dt>Tank age</dt><dd>${tankAge(log.setupDate) || 'Unset'}</dd></div>`;
+}
+
+function tankCard(tank) {
+  const {id,log} = tank;
+  const profile = profileKey(log);
+  const activeTank = id === fleet.active;
+  return `<article class="card tank-card" data-active="${activeTank}">
+      <div class="tank-card-header"><div><h2>${esc(log.name)}</h2>
+        <p class="muted">${profile === 'fowlr' ? 'Fish only with live rock' : CORAL_PROFILES[profile].label + ' reef'}</p></div>
+        ${activeTank ? '<span class="pill good">Active</span>' : ''}</div>
+      <dl class="tank-facts" data-tank-facts="${esc(id)}">${tankFacts(log)}</dl>
+      ${activeTank ? '' : `<div><button data-tank="${esc(id)}">Switch tank</button></div>`}
+      <details class="tank-edit" data-tank-edit="${esc(id)}"><summary>Edit tank</summary>
+      <div class="stack"><div><p class="muted">Tank type</p>
       <div class="profile-pills" role="group" aria-label="Tank type for ${esc(tank.log.name)}">
       ${Object.entries(CORAL_PROFILES).map(([type,profile]) => `<button data-profile="${type}" data-profile-tank="${esc(tank.id)}" aria-pressed="${type===profileKey(tank.log)}">${profile.label}</button>`).join('')}
-      </div>
-      ${profileKey(tank.log) === 'fowlr' ? '<p class="muted">Fish only with live rock</p>' : ''}
+      </div></div>
       <form class="tank-volume stack" data-volume-tank="${esc(tank.id)}" aria-label="Tank details for ${esc(tank.log.name)}">
         ${tankSetupField(tank.log.setupDate)}
-        <p class="muted" data-tank-age>${tank.log.setupDate ? 'Tank age · ' + tankAge(tank.log.setupDate) : ''}</p>
         ${tankVolumeFields(tank.log.waterVolume)}
-        <div><button>Save tank details</button></div><p role="status"></p>
+        <div><button class="primary">Save tank details</button></div><p role="status"></p>
       </form>
       <div class="actions tank-actions"><button data-rename="${esc(tank.id)}" aria-label="Rename ${esc(tank.log.name)}">Rename</button>
-      <button class="danger" data-remove-tank="${esc(tank.id)}" aria-label="Delete ${esc(tank.log.name)}">Delete</button></div></article>`).join('')}</div>
-    <form id="tank-form" class="panel stack account-panel"><h2>Add a tank</h2>
+      <button class="danger" data-remove-tank="${esc(tank.id)}" aria-label="Delete ${esc(tank.log.name)}">Delete</button></div>
+      </div></details></article>`;
+}
+
+function tanks() {
+  return `<section class="stack"><div class="page-heading"><h1>Tanks</h1></div>
+    <div class="grid tank-grid">${fleet.tanks.map(tankCard).join('')}</div>
+    <details class="panel account-panel tank-add"><summary>Add a tank</summary>
+    <form id="tank-form" class="stack">
       <label>Tank name<input name="name" required maxlength="60"></label>
       ${tankSetupField()}
       ${tankVolumeFields(null)}
       <div><button class="primary">Add tank</button></div><p id="tank-message" role="status"></p>
-    </form></section>`;
+    </form></details></section>`;
+}
+
+function openTankEditor(id) {
+  const editor = main.querySelector('[data-tank-edit="' + CSS.escape(id) + '"]');
+  if (editor) editor.open = true;
+  return editor;
 }
 
 const NEXT_STEPS = {
@@ -817,7 +854,7 @@ function dosing() {
     <div class="dose-layout">
       <form id="dose-form" class="panel stack" data-tank="${esc(fleet.active)}" data-volume-unit="${volumeUnit}">
         <div class="workspace-toolbar"><div><h2>Dose details</h2><p class="muted">${waterVolume ? `Water volume · ${doseNumber(waterVolume.amount)} ${volumeUnit}` : 'Tank volume required'}</p></div>
-          <button type="button" data-view="tanks">${waterVolume ? 'Edit volume' : 'Set volume in Tanks'}</button></div>
+          <button type="button" data-view="tanks" data-edit-active-tank>${waterVolume ? 'Edit volume' : 'Set volume in Tanks'}</button></div>
         <label>Product<input name="brand" list="dose-products" autocomplete="off" required maxlength="100" value="${esc(last?.brand ?? '')}" placeholder="Search by brand or product"></label>
         <datalist id="dose-products">${DOSE_PRODUCTS.map(product => `<option value="${esc(product.name)}"></option>`).join('')}</datalist>
         <label>Parameter to raise<select name="key">${DOSE_PARAMETERS.map(key =>
@@ -1490,6 +1527,7 @@ function showRename(tank) {
       renameTank(tank.id,name);
       renameDialog.close();
       render();
+      openTankEditor(tank.id);
       main.querySelector('[data-rename="' + CSS.escape(tank.id) + '"]')?.focus();
     } catch { message.textContent = 'Could not save the name in this browser.'; }
   };
@@ -1516,12 +1554,16 @@ document.addEventListener('click',event => {
     if (menu?.contains(button)) menu.querySelector('summary').focus();
     if (menu) menu.open=false;
     render();
+    if (Object.hasOwn(button.dataset,'editActiveTank')) {
+      openTankEditor(fleet.active)?.querySelector('[name="volume"]')?.focus();
+    }
     window.scrollTo(0,0);
   }
   if (button.dataset.profile) {
     try {
       setTankProfile(button.dataset.profileTank,button.dataset.profile);
       render();
+      openTankEditor(button.dataset.profileTank);
       main.querySelector('[data-profile-tank="' + CSS.escape(button.dataset.profileTank) + '"][data-profile="' + button.dataset.profile + '"]')?.focus();
     } catch { alert('Could not save the coral profile in this browser.'); }
   }
@@ -1543,7 +1585,7 @@ document.addEventListener('click',event => {
     const message = tank && 'Delete “' + tank.log.name + '” and all of its readings, doses, targets and tasks? This cannot be undone.' +
       (fleet.tanks.length === 1 ? ' A new empty tank will be created.' : '');
     if (message && confirm(message)) {
-      try { removeTank(tank.id); render(); main.querySelector('#tank-form input')?.focus(); }
+      try { removeTank(tank.id); render(); main.querySelector('.tank-add summary')?.focus(); }
       catch { alert('Could not delete the tank in this browser.'); }
     }
   }
@@ -1704,7 +1746,8 @@ main.addEventListener('submit',event => {
     try {
       saveFleet({...fleet,tanks:fleet.tanks.map(tank => tank.id === form.dataset.volumeTank ?
         {...tank,log:{...tank.log,...details}} : tank)});
-      form.querySelector('[data-tank-age]').textContent = details.setupDate ? 'Tank age · ' + tankAge(details.setupDate) : '';
+      const facts = main.querySelector('[data-tank-facts="' + CSS.escape(form.dataset.volumeTank) + '"]');
+      if (facts) facts.innerHTML = tankFacts(details);
       message.textContent = 'Tank details saved.';
     } catch { message.textContent = 'Could not save the tank details. Try again.'; }
     return;
