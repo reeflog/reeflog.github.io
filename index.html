@@ -87,7 +87,7 @@ dialog::backdrop{background:#020611bf}
 @media(max-width:460px){.summary>div{padding:8px;column-gap:6px}.summary>div>span:last-child{width:100%;font-size:.78rem}.reading-grid{grid-template-columns:1fr}}
 .tank-actions{margin-top:7px;padding-top:9px;border-top:1px solid var(--line)}
 .tank-volume{border-top:1px solid var(--line);margin-top:7px;padding-top:12px}
-.tank-volume [role=status]:empty{display:none}
+.tank-volume [role=status]:empty,.tank-volume [data-tank-age]:empty{display:none}
 .danger{color:#ffadb7;border-color:#714052}
 .danger:hover{background:#422633}
 
@@ -253,7 +253,7 @@ const DOSE_PRODUCTS = [
   {name:'Red Sea Foundation B KH/Alkalinity (liquid)',key:'alk',unit:'mL',amount:1,liters:100,rise:.1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'},
   {name:'Red Sea Foundation C Magnesium (liquid)',key:'mg',unit:'mL',amount:1,liters:100,rise:1,source:'https://redseafish.com/wp-content/uploads/2013/12/R99344_Red-Sea-Product-catalog-2017-EN.pdf'}
 ];
-const defaults = () => ({version:1, name:'My reef', profile:'mixed', salinityUnit:'SG', waterVolume:null, settings:{}, readings:[], doses:[], tasks:[]});
+const defaults = () => ({version:1, name:'My reef', profile:'mixed', salinityUnit:'SG', waterVolume:null, setupDate:null, settings:{}, readings:[], doses:[], tasks:[]});
 let fleet = {version:2, active:'first', tanks:[{id:'first',log:defaults()}]};
 let state = fleet.tanks[0].log;
 let loadError = '';
@@ -310,7 +310,7 @@ function validate(data) {
   const tasks = Object.hasOwn(data,'tasks') ? validateTasks(data.tasks) : [];
   const waterVolume = validateWaterVolume(Object.hasOwn(data,'waterVolume') ? data.waterVolume : null);
   return {version:1,name:data.name.trim().slice(0,60),profile:profileKey(data),salinityUnit:data.salinityUnit === 'ppt' ? 'ppt' : 'SG',
-    waterVolume,settings,readings,doses,tasks};
+    waterVolume,setupDate:validTaskDate(data.setupDate) ? data.setupDate : null,settings,readings,doses,tasks};
 }
 
 function validTaskDate(value) {
@@ -554,6 +554,29 @@ function readTankVolume(data) {
   return validateWaterVolume(amount === '' ? null : {amount:Number(amount),unit:data.get('volumeUnit')});
 }
 
+function tankAge(setupDate,today = localDate(Date.now()).slice(0,10)) {
+  if (!setupDate || setupDate > today) return '';
+  const [year,month,day] = setupDate.split('-').map(Number);
+  const [currentYear,currentMonth,currentDay] = today.split('-').map(Number);
+  const endOfMonth = new Date(Date.UTC(currentYear,currentMonth,0)).getUTCDate();
+  const elapsed = (currentYear-year)*12+currentMonth-month-(currentDay < Math.min(day,endOfMonth) ? 1 : 0);
+  if (!elapsed) return 'Less than 1 month';
+  const years = Math.floor(elapsed/12), months = elapsed%12;
+  return [years ? years + (years === 1 ? ' year' : ' years') : '',
+    months ? months + (months === 1 ? ' month' : ' months') : ''].filter(Boolean).join(', ');
+}
+
+function tankSetupField(date = null) {
+  return `<label>Setup date<input name="setupDate" type="date" max="${localDate(Date.now()).slice(0,10)}" value="${date ?? ''}"></label>`;
+}
+
+function readTankDetails(data) {
+  const setupDate = data.get('setupDate') || null;
+  if (setupDate && (!validTaskDate(setupDate) || setupDate > localDate(Date.now()).slice(0,10)))
+    throw Error('Choose a setup date on or before today.');
+  return {waterVolume:readTankVolume(data),setupDate};
+}
+
 function tanks() {
   return `<section class="stack"><h1>Tanks</h1>
     <div class="grid">${fleet.tanks.map(tank => `<article class="card"><h3>${esc(tank.log.name)}</h3>
@@ -563,14 +586,17 @@ function tanks() {
       ${Object.entries(CORAL_PROFILES).map(([type,profile]) => `<button data-profile="${type}" data-profile-tank="${esc(tank.id)}" aria-pressed="${type===profileKey(tank.log)}">${profile.label}</button>`).join('')}
       </div>
       ${profileKey(tank.log) === 'fowlr' ? '<p class="muted">Fish only with live rock</p>' : ''}
-      <form class="tank-volume stack" data-volume-tank="${esc(tank.id)}" aria-label="Water volume for ${esc(tank.log.name)}">
+      <form class="tank-volume stack" data-volume-tank="${esc(tank.id)}" aria-label="Tank details for ${esc(tank.log.name)}">
+        ${tankSetupField(tank.log.setupDate)}
+        <p class="muted" data-tank-age>${tank.log.setupDate ? 'Tank age · ' + tankAge(tank.log.setupDate) : ''}</p>
         ${tankVolumeFields(tank.log.waterVolume)}
-        <div><button>Save volume</button></div><p role="status"></p>
+        <div><button>Save tank details</button></div><p role="status"></p>
       </form>
       <div class="actions tank-actions"><button data-rename="${esc(tank.id)}" aria-label="Rename ${esc(tank.log.name)}">Rename</button>
       <button class="danger" data-remove-tank="${esc(tank.id)}" aria-label="Delete ${esc(tank.log.name)}">Delete</button></div></article>`).join('')}</div>
     <form id="tank-form" class="panel stack"><h2>Add a tank</h2>
       <label>Tank name<input name="name" required maxlength="60"></label>
+      ${tankSetupField()}
       ${tankVolumeFields(null)}
       <div><button class="primary">Add tank</button></div><p id="tank-message" role="status"></p>
     </form></section>`;
@@ -611,6 +637,7 @@ function overview() {
   const profile = profileKey(state);
   const tankType = profile === 'fowlr' ? 'FOWLR' : CORAL_PROFILES[profile].label + ' reef';
   const volume = state.waterVolume;
+  const age = tankAge(state.setupDate);
   const items = active().map(([key,name,unit]) => {
     const setting = config(key);
     const readings = records(key);
@@ -623,7 +650,7 @@ function overview() {
   return `<section class="hero tank-overview"><div class="tank-details"><div class="tank-heading"><h1>${esc(state.name)}</h1>
     ${fleet.tanks.length > 1 ? `<span class="tank-heading-arrow" aria-hidden="true"></span><select id="overview-tank" aria-label="Switch tank">
       ${fleet.tanks.map(tank => `<option value="${esc(tank.id)}" ${tank.id === fleet.active ? 'selected' : ''}>${esc(tank.log.name)}</option>`).join('')}
-      </select>` : ''}</div><p class="tank-meta">${tankType}${volume ? ` · ${doseNumber(volume.amount)} ${volume.unit}` : ''}</p></div>
+      </select>` : ''}</div><p class="tank-meta">${tankType}${volume ? ` · ${doseNumber(volume.amount)} ${volume.unit}` : ''}${age ? ` · Tank age ${age.toLowerCase()}` : ''}</p></div>
     <button class="primary" data-add>Add water test</button></section>
   ${outstandingTasks()}
   <section aria-label="Reading summary" class="summary">
@@ -1584,14 +1611,15 @@ main.addEventListener('submit',event => {
     event.preventDefault();
     const form = event.target;
     const message = form.querySelector('[role=status]');
-    let waterVolume;
-    try { waterVolume = readTankVolume(new FormData(form)); }
+    let details;
+    try { details = readTankDetails(new FormData(form)); }
     catch (error) { message.textContent = error.message; return; }
     try {
       saveFleet({...fleet,tanks:fleet.tanks.map(tank => tank.id === form.dataset.volumeTank ?
-        {...tank,log:{...tank.log,waterVolume}} : tank)});
-      message.textContent = waterVolume ? 'Water volume saved.' : 'Water volume cleared.';
-    } catch { message.textContent = 'Could not save the water volume. Try again.'; }
+        {...tank,log:{...tank.log,...details}} : tank)});
+      form.querySelector('[data-tank-age]').textContent = details.setupDate ? 'Tank age · ' + tankAge(details.setupDate) : '';
+      message.textContent = 'Tank details saved.';
+    } catch { message.textContent = 'Could not save the tank details. Try again.'; }
     return;
   }
   if (event.target.id === 'tank-form') {
@@ -1600,11 +1628,11 @@ main.addEventListener('submit',event => {
     const name = data.get('name').trim();
     const message = document.querySelector('#tank-message');
     if (!name) { message.textContent = 'Enter a tank name.'; return; }
-    let waterVolume;
-    try { waterVolume = readTankVolume(data); }
+    let details;
+    try { details = readTankDetails(data); }
     catch (error) { message.textContent = error.message; return; }
     const id = crypto.randomUUID?.() ?? Date.now()+'-'+Math.random().toString(36).slice(2);
-    try { activate({...fleet,active:id,tanks:[...fleet.tanks,{id,log:{...defaults(),name,waterVolume}}]}); }
+    try { activate({...fleet,active:id,tanks:[...fleet.tanks,{id,log:{...defaults(),name,...details}}]}); }
     catch { message.textContent = 'Could not save the tank in this browser.'; }
     return;
   }
