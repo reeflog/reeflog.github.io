@@ -704,10 +704,12 @@ function overview() {
 
 function parameterRow(item) {
   const advice = nextStep(item);
+  const value = item.reading ? format(displayParameterValue(item.key,item.reading.value)) : '—';
+  const status = item.reading ? `${value} ${item.unit}. ${item.label}.` : item.label;
   return `<article class="parameter-row">
-    <button type="button" class="parameter-open" data-history="${item.key}" aria-label="View ${item.name} history">
+    <button type="button" class="parameter-open" data-history="${item.key}" aria-label="View ${item.name} history. ${status}">
       <span class="parameter-label"><strong>${item.name}</strong><small>${range(item.setting,item.unit)}</small></span>
-      <span class="parameter-reading"><strong>${item.reading ? format(displayParameterValue(item.key,item.reading.value)) : '—'} <span class="unit">${item.unit}</span></strong>
+      <span class="parameter-reading"><strong>${value} <span class="unit">${item.unit}</span></strong>
         <small class="indicator"><span class="dot ${item.color}" aria-hidden="true"></span>${item.label}</small></span>
       <span class="parameter-chevron" aria-hidden="true"></span>
     </button>
@@ -1552,7 +1554,7 @@ document.addEventListener('click',event => {
     try {
       save({...state,tasks:state.tasks.filter(task => task.id !== button.dataset.deleteTask)});
       main.querySelector('#task-list').innerHTML = taskList();
-      const next = main.querySelector('[data-delete-task]') ?? main.querySelector('#task-form textarea');
+      const next = main.querySelector('[data-delete-task]') ?? main.querySelector('.task-compose summary');
       next?.focus();
       message.textContent = 'Task deleted.';
     } catch { message.textContent = 'Could not delete the task.'; }
