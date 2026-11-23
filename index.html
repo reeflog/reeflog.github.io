@@ -133,7 +133,7 @@ input[data-scanned]{border-color:#48d8ee}
 </style>
 </head>
 <body>
-<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="dosing">Dosing</button><button data-view="tasks">To Do</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="tanks">Tanks</button><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
+<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="dosing">Dosing</button><button data-view="tasks">Tasks</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="tanks">Tanks</button><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
 <main id="main"></main>
 <dialog id="entry"><form id="test-form" class="stack"></form></dialog>
 <dialog id="rename-tank" aria-labelledby="rename-title">
@@ -573,7 +573,7 @@ function overview() {
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
   const count = color => items.filter(item => item.color === color).length;
   return `<section class="hero"><div><h1>${esc(state.name)}</h1><p>${CORAL_PROFILES[profileKey(state)].label}${profileKey(state) === 'fowlr' ? '' : ' reef'} · Water parameters</p></div><button class="primary" data-add>Add water test</button></section>
-  ${dueCount ? `<section class="panel actions"><span class="task-due">${dueCount} ${dueCount === 1 ? 'task' : 'tasks'} due</span><button data-view="tasks">Open To Do</button></section>` : ''}
+  ${dueCount ? `<section class="panel actions"><span class="task-due">${dueCount} ${dueCount === 1 ? 'task' : 'tasks'} due</span><button data-view="tasks">Open Tasks</button></section>` : ''}
   <section aria-label="Reading summary" class="summary">
     ${[['green','Healthy'],['yellow','Needs attention'],['red','Fix immediately']].map(([color,label]) =>
       `<div><span class="dot ${color}" aria-hidden="true"></span><strong>${count(color)}</strong><span>${label}</span></div>`).join('')}
@@ -611,7 +611,7 @@ function taskList() {
 
 function taskView() {
   return `<section class="stack">
-    <div><h1>To Do</h1><p class="muted">${esc(state.name)}</p></div>
+    <div><h1>Tasks</h1><p class="muted">${esc(state.name)}</p></div>
     <form id="task-form" class="panel stack">
       <label>Task<textarea name="text" rows="2" required maxlength="240" placeholder="e.g. Test alkalinity"></textarea></label>
       <label class="check"><input type="checkbox" name="remind" aria-controls="task-reminder-date"> Set a reminder</label>
