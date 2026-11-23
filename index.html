@@ -117,7 +117,8 @@ input[data-scanned]{border-color:#48d8ee}
 .dose-marker.projected{background:#5ed9f3;border-radius:3px;transform:translateX(-50%) rotate(45deg)}
 .dose-legend{margin:0;color:var(--muted)}
 #dose-suggestion{border-top:1px solid var(--line);padding-top:14px}
-.task-row{display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--line);padding-block:10px;cursor:pointer}
+.task-row{display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--line);padding-block:10px}
+.task-row label{display:flex;gap:12px;flex:1;min-width:0;align-items:flex-start;cursor:pointer}
 .task-row input{accent-color:var(--teal);margin-top:5px}
 .task-row span{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
 .task-row small{display:block}
@@ -128,7 +129,7 @@ input[data-scanned]{border-color:#48d8ee}
 </style>
 </head>
 <body>
-<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="history">History</button><button data-view="dosing">Dosing</button><button data-view="tasks">To Do</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="tanks">Tanks</button><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
+<header><div class="bar"><button class="brand" type="button" data-view="overview" aria-label="REEFLOG home"><span>REEF</span>LOG</button><nav aria-label="Main navigation"><button data-view="overview">Overview</button><button data-view="dosing">Dosing</button><button data-view="tasks">To Do</button><button data-view="history">History</button><details id="settings-menu" class="settings-menu"><summary aria-label="Settings">Settings</summary><div class="settings-popover"><button data-view="tanks">Tanks</button><button data-view="account">Account</button><button data-view="targets">Targets</button><button data-view="backup">Backup</button></div></details></nav></div></header>
 <main id="main"></main>
 <dialog id="entry"><form id="test-form" class="stack"></form></dialog>
 <dialog id="rename-tank" aria-labelledby="rename-title">
@@ -594,10 +595,11 @@ function taskList() {
   const row = task => {
     const due = taskIsDue(task,today);
     const prefix = task.done ? 'Reminder was' : task.reminder < today ? 'Overdue' : due ? 'Due today' : 'Reminder';
-    return `<label class="task-row ${task.done ? 'task-complete' : ''}">
-      <input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''}>
-      <span><span class="task-title">${esc(task.text)}</span>${task.reminder ? `<small class="${due ? 'task-due' : 'muted'}">${prefix} · <time datetime="${task.reminder}">${new Date(task.reminder+'T12:00:00').toLocaleDateString(undefined,{dateStyle:'medium'})}</time></small>` : ''}</span>
-    </label>`;
+    return `<div class="task-row ${task.done ? 'task-complete' : ''}">
+      <label><input type="checkbox" data-task="${esc(task.id)}" ${task.done ? 'checked' : ''}>
+      <span><span class="task-title">${esc(task.text)}</span>${task.reminder ? `<small class="${due ? 'task-due' : 'muted'}">${prefix} · <time datetime="${task.reminder}">${new Date(task.reminder+'T12:00:00').toLocaleDateString(undefined,{dateStyle:'medium'})}</time></small>` : ''}</span></label>
+      <button type="button" class="danger" data-delete-task="${esc(task.id)}" aria-label="Delete task ${esc(task.text)}">Delete</button>
+    </div>`;
   };
   return `<div class="panel stack"><h2>Open tasks</h2>${open.map(row).join('') || '<p class="muted">No open tasks.</p>'}</div>
     ${completed.length ? `<div class="panel stack"><h2>Completed</h2>${completed.map(row).join('')}</div>` : ''}`;
@@ -1252,6 +1254,16 @@ document.addEventListener('click',event => {
       render();
       main.querySelector('#dose-message').textContent = 'Dose deleted.';
     } catch { alert('Could not delete this dose.'); }
+  }
+  if (button.dataset.deleteTask && confirm('Delete this task?')) {
+    const message = main.querySelector('#task-message');
+    try {
+      save({...state,tasks:state.tasks.filter(task => task.id !== button.dataset.deleteTask)});
+      main.querySelector('#task-list').innerHTML = taskList();
+      const next = main.querySelector('[data-delete-task]') ?? main.querySelector('#task-form textarea');
+      next?.focus();
+      message.textContent = 'Task deleted.';
+    } catch { message.textContent = 'Could not delete the task.'; }
   }
   if (button.dataset.cloud) void accountAction(button.dataset.cloud);
   if (button.id === 'export') {
