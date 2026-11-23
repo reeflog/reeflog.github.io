@@ -42,11 +42,17 @@ button,input,select,textarea{background:#141f30;color:var(--ink);border-color:#3
 .primary{background:#48d8ee;color:#06222c}
 .hero{position:relative;background:radial-gradient(ellipse at 93% 105%,#174e63 0%,transparent 65%),linear-gradient(120deg,#172738,#101727);border-color:#2a455a}
 .hero p{color:#b0c7da}
-.tank-heading{display:inline-flex;align-items:center;gap:.9rem;position:relative;max-width:100%;border-radius:6px}
+.tank-overview{padding:clamp(16px,3vw,28px);gap:12px 20px}
+.tank-overview .tank-details{min-width:0}
+.tank-overview h1{font-size:clamp(1.75rem,5vw,2.75rem);letter-spacing:-.045em}
+.tank-overview .tank-meta{margin-top:7px;font-size:.9rem}
+.tank-heading{display:inline-flex;align-items:center;gap:.65rem;position:relative;max-width:100%;border-radius:6px}
 .tank-heading h1{overflow-wrap:anywhere}
 .tank-heading select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 .tank-heading:focus-within{outline:2px solid var(--teal);outline-offset:5px}
-.tank-heading-arrow{width:.65rem;height:.65rem;flex:none;border:solid var(--teal);border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg)}
+.tank-heading-arrow{width:27px;height:27px;flex:none;display:grid;place-items:center;border:1px solid #355768;border-radius:8px;color:var(--teal);background:#132b38}
+.tank-heading-arrow::after{content:"";width:7px;height:7px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg)}
+.tank-heading:hover .tank-heading-arrow{background:#215062}
 .card,.panel,dialog{background:#121c2b;border-color:var(--line)}
 .card h3{color:#b9c9db}
 .pill{background:#273548;color:#d5e4f0}
@@ -579,6 +585,9 @@ function nextStep(item) {
 }
 
 function overview() {
+  const profile = profileKey(state);
+  const tankType = profile === 'fowlr' ? 'FOWLR' : CORAL_PROFILES[profile].label + ' reef';
+  const volume = state.waterVolume;
   const items = active().map(([key,name,unit]) => {
     const setting = config(key);
     const readings = records(key);
@@ -588,10 +597,10 @@ function overview() {
   const order = ['red','yellow','green','gray'];
   items.sort((a,b) => order.indexOf(a.color) - order.indexOf(b.color));
   const count = color => items.filter(item => item.color === color).length;
-  return `<section class="hero"><div><div class="tank-heading"><h1>${esc(state.name)}</h1>
+  return `<section class="hero tank-overview"><div class="tank-details"><div class="tank-heading"><h1>${esc(state.name)}</h1>
     ${fleet.tanks.length > 1 ? `<span class="tank-heading-arrow" aria-hidden="true"></span><select id="overview-tank" aria-label="Switch tank">
       ${fleet.tanks.map(tank => `<option value="${esc(tank.id)}" ${tank.id === fleet.active ? 'selected' : ''}>${esc(tank.log.name)}</option>`).join('')}
-      </select>` : ''}</div><p>${CORAL_PROFILES[profileKey(state)].label}${profileKey(state) === 'fowlr' ? '' : ' reef'} · Water parameters</p></div>
+      </select>` : ''}</div><p class="tank-meta">${tankType}${volume ? ` · ${doseNumber(volume.amount)} ${volume.unit}` : ''}</p></div>
     <button class="primary" data-add>Add water test</button></section>
   ${outstandingTasks()}
   <section aria-label="Reading summary" class="summary">
