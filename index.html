@@ -936,8 +936,8 @@ function dosing() {
 }
 
 const doseNumber = value => value.toLocaleString(undefined,{maximumSignificantDigits:8,useGrouping:false});
-const doseEstimate = value => value.toLocaleString(undefined,{
-  minimumFractionDigits:1,maximumFractionDigits:1,useGrouping:false
+const doseEstimate = (value,decimals = 1) => value.toLocaleString(undefined,{
+  minimumFractionDigits:decimals,maximumFractionDigits:decimals,useGrouping:false
 });
 const doseRetest = dose => state.readings.find(row => row.id === dose.retestId && row.key === dose.key && row.date >= dose.date);
 
@@ -996,9 +996,9 @@ function doseSuggestion(dose,latest,{low,high},unit) {
     <p class="muted">This estimate aims for the bottom of your target range. Follow the product’s dosing limits, split the correction as directed, and retest before adding more.</p>`;
 }
 
-function doseRate(amount,volume,volumeUnit,unit) {
+function doseRate(amount,volume,volumeUnit,unit,formatValue = doseNumber) {
   const rate = amount / gallons(volume,volumeUnit);
-  return Number.isFinite(rate) && rate > 0 ? `${doseNumber(rate)} ${unit} per US gal` : '';
+  return Number.isFinite(rate) && rate > 0 ? `${formatValue(rate)} ${unit} per US gal` : '';
 }
 
 function readDose(form) {
@@ -1034,7 +1034,8 @@ function updateDosePreview() {
   const [,name,unit] = parameter(dose.key);
   const target = config(dose.key);
   const latest = records(dose.key)[0];
-  const labelRate = doseRate(dose.labelAmount,dose.labelVolume,dose.volumeUnit,dose.unit);
+  const formatLabel = value => doseEstimate(value,2);
+  const labelRate = doseRate(dose.labelAmount,dose.labelVolume,dose.volumeUnit,dose.unit,formatLabel);
   const enteredRate = doseRate(dose.amount,dose.tankVolume,dose.volumeUnit,dose.unit);
   form.dataset.catalogStrength = matchesDoseProduct(input,product) ? 'yes' : '';
   main.querySelector('#dose-label-note').innerHTML = form.dataset.catalogStrength
@@ -1052,7 +1053,7 @@ function updateDosePreview() {
     <div><span>Latest ${name} test</span><strong>${test}</strong>${latest ? `<span class="muted">${dateText(latest.date)}</span>` : ''}</div>
     <div><span>Projected after dose</span><strong>${estimate}</strong>${rise !== null ? `<span class="muted">+${doseEstimate(rise)} ${unit} estimated</span>` : ''}</div></div>
     ${projected !== null ? projectionMap(latest.value,projected,target) : ''}
-    ${labelRate && dose.labelRise > 0 ? `<p class="muted">Label reference · ${labelRate} for a rise of ${doseNumber(dose.labelRise)} ${unit}</p>` : ''}
+    ${labelRate && dose.labelRise > 0 ? `<p class="muted">Label reference · ${labelRate} for a rise of ${formatLabel(dose.labelRise)} ${unit}</p>` : ''}
     ${enteredRate ? `<p class="muted">Entered dose · ${enteredRate}</p>` : ''}
     <p>${range(target,unit,doseNumber)}${outcome ? ` · <strong>${outcome}</strong>` : ''}</p>
     ${!latest ? `<div><button type="button" data-add="${dose.key}">Add a baseline test</button></div>` : ''}`;
