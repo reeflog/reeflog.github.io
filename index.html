@@ -922,7 +922,7 @@ function dosing() {
     </div>
     <section class="panel history"><h2>Dose history</h2>${doses.map(dose => {
       const [,name,unit] = parameter(dose.key);
-      const projection = dose.baseline ? `${doseNumber(dose.baseline.value)} → ${doseNumber(dose.baseline.value + doseIncrease(dose))} ${unit} estimated` : 'No baseline test';
+      const projection = dose.baseline ? `${doseNumber(dose.baseline.value)} → ${doseEstimate(dose.baseline.value + doseIncrease(dose))} ${unit} estimated` : 'No baseline test';
       const retest = doseRetest(dose);
       const pending = state.tasks.find(task => task.doseId === dose.id && !task.done);
       return `<article><div><strong>${esc(dose.brand)}</strong><div>${name} · ${doseNumber(dose.amount)} ${dose.unit}</div>
@@ -936,6 +936,9 @@ function dosing() {
 }
 
 const doseNumber = value => value.toLocaleString(undefined,{maximumSignificantDigits:8});
+const doseEstimate = value => value.toLocaleString(undefined,{
+  minimumFractionDigits:1,maximumFractionDigits:1,useGrouping:false
+});
 const doseRetest = dose => state.readings.find(row => row.id === dose.retestId && row.key === dose.key && row.date >= dose.date);
 
 function retestComparison(dose,retest,unit) {
@@ -945,7 +948,7 @@ function retestComparison(dose,retest,unit) {
   const events = [doses ? `${doses} additional ${doses === 1 ? 'dose' : 'doses'}` : '',
     changes ? `${changes} water ${changes === 1 ? 'change' : 'changes'}` : ''].filter(Boolean);
   const before = dose.baseline ? doseNumber(dose.baseline.value) + ' ' + unit : 'Unavailable';
-  const projected = dose.baseline ? doseNumber(dose.baseline.value + doseIncrease(dose)) + ' ' + unit : 'Unavailable';
+  const projected = dose.baseline ? doseEstimate(dose.baseline.value + doseIncrease(dose)) + ' ' + unit : 'Unavailable';
   return `<p>Before <strong>${before}</strong> · Projected <strong>${projected}</strong> · Measured <strong>${doseNumber(retest.value)} ${unit}</strong></p>
     ${events.length ? `<p class="muted">Also logged before retest: ${events.join(' and ')}.</p>` : ''}`;
 }
@@ -988,7 +991,7 @@ function doseSuggestion(dose,latest,{low,high},unit) {
   if (!validDose(reference)) return 'Enter the full label strength to calculate an amount.';
   const amount = (low - latest.value) / doseIncrease(reference);
   if (!Number.isFinite(amount) || amount <= 0) return 'Check the entered label strength.';
-  return `<div class="dose-values"><div><span>Estimated total amount</span><strong>${doseNumber(amount)} ${dose.unit}</strong></div>
+  return `<div class="dose-values"><div><span>Estimated total amount</span><strong>${doseEstimate(amount)} ${dose.unit}</strong></div>
     <div><span>Target to reach</span><strong>${doseNumber(low)} ${unit}</strong></div></div>
     <p class="muted">This estimate aims for the bottom of your target range. Follow the product’s dosing limits, split the correction as directed, and retest before adding more.</p>`;
 }
@@ -1044,10 +1047,10 @@ function updateDosePreview() {
     target.high !== null && projected > target.high ? 'Above target' : target.low === null && target.high === null ? '' : 'Within target';
   form.querySelector('#dose-rise-unit').textContent = unit;
   const test = latest ? `${doseNumber(latest.value)} ${unit}` : '—';
-  const estimate = projected === null ? '—' : `${doseNumber(projected)} ${unit}`;
+  const estimate = projected === null ? '—' : `${doseEstimate(projected)} ${unit}`;
   main.querySelector('#dose-preview').innerHTML = `<div class="dose-values">
     <div><span>Latest ${name} test</span><strong>${test}</strong>${latest ? `<span class="muted">${dateText(latest.date)}</span>` : ''}</div>
-    <div><span>Projected after dose</span><strong>${estimate}</strong>${rise !== null ? `<span class="muted">+${doseNumber(rise)} ${unit} estimated</span>` : ''}</div></div>
+    <div><span>Projected after dose</span><strong>${estimate}</strong>${rise !== null ? `<span class="muted">+${doseEstimate(rise)} ${unit} estimated</span>` : ''}</div></div>
     ${projected !== null ? projectionMap(latest.value,projected,target) : ''}
     ${labelRate && dose.labelRise > 0 ? `<p class="muted">Label reference · ${labelRate} for a rise of ${doseNumber(dose.labelRise)} ${unit}</p>` : ''}
     ${enteredRate ? `<p class="muted">Entered dose · ${enteredRate}</p>` : ''}
