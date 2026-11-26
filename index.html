@@ -578,9 +578,9 @@ function activate(next) {
   window.scrollTo(0,0);
 }
 
-function range({low,high},unit) {
+function range({low,high},unit,formatValue = format) {
   if (low === null && high === null) return 'Target unset';
-  const bounds = low === null ? '≤ ' + format(high) : high === null ? '≥ ' + format(low) : format(low) + '–' + format(high);
+  const bounds = low === null ? '≤ ' + formatValue(high) : high === null ? '≥ ' + formatValue(low) : formatValue(low) + '–' + formatValue(high);
   return 'Target ' + bounds + (unit ? ' ' + unit : '');
 }
 
@@ -935,7 +935,7 @@ function dosing() {
   </section>`;
 }
 
-const doseNumber = value => value.toLocaleString(undefined,{maximumSignificantDigits:8});
+const doseNumber = value => value.toLocaleString(undefined,{maximumSignificantDigits:8,useGrouping:false});
 const doseEstimate = value => value.toLocaleString(undefined,{
   minimumFractionDigits:1,maximumFractionDigits:1,useGrouping:false
 });
@@ -1054,7 +1054,7 @@ function updateDosePreview() {
     ${projected !== null ? projectionMap(latest.value,projected,target) : ''}
     ${labelRate && dose.labelRise > 0 ? `<p class="muted">Label reference · ${labelRate} for a rise of ${doseNumber(dose.labelRise)} ${unit}</p>` : ''}
     ${enteredRate ? `<p class="muted">Entered dose · ${enteredRate}</p>` : ''}
-    <p>${range(target,unit)}${outcome ? ` · <strong>${outcome}</strong>` : ''}</p>
+    <p>${range(target,unit,doseNumber)}${outcome ? ` · <strong>${outcome}</strong>` : ''}</p>
     ${!latest ? `<div><button type="button" data-add="${dose.key}">Add a baseline test</button></div>` : ''}`;
   main.querySelector('#dose-suggestion').innerHTML = `<h3>Suggested amount</h3><div class="stack">${doseSuggestion(dose,latest,target,unit)}</div>`;
 }
